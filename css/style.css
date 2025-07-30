@@ -1,0 +1,182 @@
+/* css/style.css */
+
+/* Base styles and font */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8f8f8; /* Light grey background matching Flutter app */
+    color: #212121; /* Dark text for readability */
+    opacity: 0; /* Initial state for fade-in animation */
+    animation: fadeIn 0.8s ease-out forwards;
+    line-height: 1.6; /* Improved readability */
+}
+
+/* Keyframe animation for page load */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header (App Bar) styles */
+.app-bar {
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* Subtle shadow matching Flutter app */
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky; /* Makes header sticky */
+    top: 0;
+    z-index: 1000; /* Ensures header stays on top */
+}
+.header-logo {
+    height: 35px; /* Adjust logo size */
+    width: 35px;
+    border-radius: 50%; /* Circular logo if needed */
+    margin-right: 10px;
+}
+
+/* Card container styles (for sections) */
+.card-container {
+    background-color: white;
+    border-radius: 15px; /* More rounded corners matching Flutter app */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Deeper shadow for cards */
+    padding: 2rem;
+    margin-bottom: 2rem;
+    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+.card-container:hover {
+    transform: translateY(-5px); /* Lift effect on hover */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Input field styles */
+.input-field {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 10px; /* Rounded corners for inputs */
+    border: none; /* No default border */
+    background-color: #f5f5f5; /* Light grey background matching Flutter app */
+    font-size: 1rem;
+    color: #212121;
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.input-field:focus {
+    outline: none;
+    border: 1.5px solid rgb(242, 206, 90); /* Primary red border on focus */
+    box-shadow: 0 0 0 3px rgba(242, 206, 90, 0.2); /* Red focus ring */
+    background-color: white;
+}
+
+/* Custom primary button styles */
+.btn-primary-custom {
+    background-color: #212121; /* Dark black matching Flutter app */
+    color: white;
+    padding: 0.85rem 2rem;
+    border-radius: 10px; /* Rounded corners for buttons */
+    font-weight: 600;
+    transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out, box-shadow 0.2s ease-in-out;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+.btn-primary-custom:hover {
+    background-color: #374151; /* Slightly lighter black on hover */
+    transform: translateY(-2px); /* Slight lift effect */
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+.btn-primary-custom:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Text colors matching Flutter app */
+.text-primary-red {
+    color: rgb(242, 206, 90); /* Primary red color */
+}
+.text-success-green {
+    color: rgb(76, 175, 80); /* Green success color */
+}
+.text-grey-600 {
+    color: #616161; /* Medium grey text */
+}
+.text-grey-800 {
+    color: #374151; /* Dark grey text */
+}
+
+/* Record item styles (for displayed data) */
+.record-item {
+    background-color: #f9fafb; /* Lighter grey for items */
+    border-radius: 10px; /* Rounded corners for record items */
+    padding: 1rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Subtle shadow */
+    transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+    opacity: 0; /* Initial state for new record animation */
+    transform: translateY(20px);
+}
+.record-item:hover {
+    background-color: #f0f2f5; /* Slightly darker on hover */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.record-item:nth-child(even) {
+    background-color: #ffffff; /* Alternate background for better readability */
+}
+
+/* Message box for alerts */
+.message-box {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #212121; /* Dark black */
+    color: white;
+    padding: 25px 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    z-index: 1050;
+    font-family: 'Inter', sans-serif;
+    font-size: 1.1rem;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+}
+
+/* Custom color for the logo based on RGB values */
+.logo-color {
+    background-color: rgb(242, 206, 90); /* RGB: 242/255, 206/255, 90/255 */
+}
+
+/* Specific styles for student rows in attendance/grades */
+.student-row {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #eee;
+}
+.student-row:last-child {
+    border-bottom: none;
+}
+.student-row .student-name {
+    flex-grow: 1;
+    font-weight: 500;
+    color: #212121;
+}
+.student-row .attendance-status-select,
+.student-row .grade-input {
+    width: 120px; /* Fixed width for select/input */
+    margin-left: 1rem;
+    padding: 0.5rem;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    background-color: #f9fafb;
+    transition: all 0.2s ease-in-out;
+}
+.student-row .attendance-status-select:focus,
+.student-row .grade-input:focus {
+    border-color: rgb(242, 206, 90);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
+}
+.student-row .grade-input {
+    text-align: center;
+}

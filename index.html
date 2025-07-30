@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learnaria - Teacher Dashboard</title>
+    <!-- Favicon -->
+    <link rel="icon" href="assets/images/favicon.png" type="image/x-icon">
+    <link rel="shortcut icon" href="assets/images/favicon.png" type="image/x-icon">
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs (IMPORTANT: Use versions compatible with your setup) -->
+    <!-- These are compat versions for broader browser support. For modular, adjust. -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="font-inter">
+    <header class="app-bar">
+        <div class="flex items-center">
+            <!-- Logo Image -->
+            <img src="assets/images/learnaria_logo.png" alt="Learnaria Logo" class="header-logo rounded-full"> 
+            <h1 class="text-2xl font-extrabold text-gray-900">Learnaria</h1>
+        </div>
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800">Teacher Dashboard</h2>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <h2 id="dashboardTitle" class="text-4xl font-extrabold mb-8 text-center text-gray-900"></h2>
+
+        <!-- Refresh Data Section -->
+        <section class="card-container">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Manage & View Data (Firestore)</h3>
+            <p class="text-grey-600 mb-6">Input data below or click 'Refresh Data' to view existing records from Firestore.</p>
+            <button id="refreshDataButton" class="btn-primary-custom">Refresh Data</button>
+            
+            <div id="loadingIndicator" class="mt-4 text-grey-600 hidden">
+                <div class="spinner-border text-primary-red" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="ml-2">Loading data...</span>
+            </div>
+        </section>
+
+        <!-- Manage Students Section -->
+        <section class="card-container">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Manage Students</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label for="newStudentName" class="block text-sm font-semibold text-grey-800 mb-2">Student Name:</label>
+                    <input type="text" id="newStudentName" class="input-field" placeholder="Enter new student name">
+                </div>
+                <div>
+                    <label for="newParentPhoneNumber" class="block text-sm font-semibold text-grey-800 mb-2">Parent Phone Number:</label>
+                    <input type="text" id="newParentPhoneNumber" class="input-field" placeholder="e.g., +1234567890">
+                </div>
+            </div>
+            <button id="addNewStudentButton" class="btn-primary-custom">Add New Student</button>
+
+            <h4 class="text-xl font-bold mt-8 mb-4 text-gray-800">All Students:</h4>
+            <div id="studentsListDisplay" class="space-y-4">
+                <!-- Students list will be displayed here -->
+                <p class="text-grey-600 text-center">Loading students...</p>
+            </div>
+        </section>
+
+        <!-- Attendance Management Section -->
+        <section class="card-container">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Daily Attendance</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label for="attendanceDateInput" class="block text-sm font-semibold text-grey-800 mb-2">Select Date:</label>
+                    <input type="date" id="attendanceDateInput" class="input-field">
+                </div>
+            </div>
+            
+            <h4 class="text-xl font-bold mt-8 mb-4 text-gray-800">Mark Attendance:</h4>
+            <div id="attendanceStudentsContainer" class="space-y-3 p-4 bg-gray-50 rounded-lg">
+                <!-- Student attendance inputs will be rendered here -->
+                <p class="text-grey-600 text-center">Select a date to mark attendance.</p>
+            </div>
+            <button id="saveDailyAttendanceButton" class="btn-primary-custom mt-6">Save Daily Attendance</button>
+        </section>
+
+        <!-- Grades & Assignments Management Section -->
+        <section class="card-container">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Grades Management</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label for="assignmentSelect" class="block text-sm font-semibold text-grey-800 mb-2">Select Assignment:</label>
+                    <select id="assignmentSelect" class="input-field">
+                        <option value="">Select an Assignment</option>
+                        <!-- Options will be loaded from Firestore -->
+                    </select>
+                </div>
+                <div>
+                    <label for="newAssignmentName" class="block text-sm font-semibold text-grey-800 mb-2">Or Add New Assignment Name:</label>
+                    <input type="text" id="newAssignmentName" class="input-field" placeholder="e.g., Quiz 1">
+                </div>
+                <div>
+                    <label for="newAssignmentDate" class="block text-sm font-semibold text-grey-800 mb-2">New Assignment Date:</label>
+                    <input type="date" id="newAssignmentDate" class="input-field">
+                </div>
+                <div class="col-span-full md:col-span-1 lg:col-span-1">
+                    <button id="addNewAssignmentButton" class="btn-primary-custom w-full">Add New Assignment</button>
+                </div>
+            </div>
+            
+            <h4 class="text-xl font-bold mt-8 mb-4 text-gray-800">Enter Grades:</h4>
+            <div id="gradesStudentsContainer" class="space-y-3 p-4 bg-gray-50 rounded-lg">
+                <!-- Student grade inputs will be rendered here -->
+                <p class="text-grey-600 text-center">Select an assignment to enter grades.</p>
+            </div>
+            <button id="saveAssignmentGradesButton" class="btn-primary-custom mt-6">Save Assignment Grades</button>
+        </section>
+
+        <!-- Class Schedule Management Section (Remains similar) -->
+        <section class="card-container">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Class Schedule Management</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <label for="classSubject" class="block text-sm font-semibold text-grey-800 mb-2">Subject:</label>
+                    <input type="text" id="classSubject" class="input-field" placeholder="Enter subject name">
+                </div>
+                <div>
+                    <label for="classDate" class="block text-sm font-semibold text-grey-800 mb-2">Date:</label>
+                    <input type="date" id="classDate" class="input-field">
+                </div>
+                <div>
+                    <label for="classTime" class="block text-sm font-semibold text-grey-800 mb-2">Time:</label>
+                    <input type="time" id="classTime" class="input-field">
+                </div>
+                <div>
+                    <label for="classRoom" class="block text-sm font-semibold text-grey-800 mb-2">Room/Classroom:</label>
+                    <input type="text" id="classRoom" class="input-field" placeholder="e.g., Room 101, Online">
+                </div>
+                <div class="col-span-full md:col-span-1 lg:col-span-1">
+                    <label for="parentPhoneNumberSchedule" class="block text-sm font-semibold text-grey-800 mb-2">Parent Phone Number (Optional):</label>
+                    <input type="text" id="parentPhoneNumberSchedule" class="input-field" placeholder="e.g., +1234567890">
+                </div>
+            </div>
+            <button id="addClassScheduleButton" class="btn-primary-custom">Add Class Schedule</button>
+
+            <h4 class="text-xl font-bold mt-8 mb-4 text-gray-800">Recent Schedules:</h4>
+            <div id="classScheduleDisplay" class="space-y-4">
+                <!-- Class schedule will be displayed here by JavaScript -->
+                <p class="text-grey-600 text-center">No class schedule records loaded yet.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Custom JavaScript -->
+    <script src="js/script.js"></script>
+</body>
+</html>
