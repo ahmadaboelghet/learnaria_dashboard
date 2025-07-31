@@ -112,8 +112,6 @@ body {
     align-items: center;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Subtle shadow */
     transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
-    opacity: 0; /* Initial state for new record animation */
-    transform: translateY(20px);
 }
 .record-item:hover {
     background-color: #f0f2f5; /* Slightly darker on hover */
@@ -140,11 +138,6 @@ body {
     text-align: center;
     opacity: 0;
     transition: opacity 0.4s ease-in-out;
-}
-
-/* Custom color for the logo based on RGB values */
-.logo-color {
-    background-color: rgb(242, 206, 90); /* RGB: 242/255, 206/255, 90/255 */
 }
 
 /* Specific styles for student rows in attendance/grades */
