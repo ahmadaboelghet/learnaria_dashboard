@@ -39,6 +39,21 @@
 
         <div id="mainContent" class="hidden">
             <section class="card-container">
+                <h3 class="text-2xl font-bold mb-6 text-gray-800">My Profile</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="teacherNameInput" class="block text-sm font-semibold text-grey-800 mb-2">My Name:</label>
+                        <input type="text" id="teacherNameInput" class="input-field" placeholder="Enter your full name">
+                    </div>
+                    <div>
+                        <label for="teacherSubjectInput" class="block text-sm font-semibold text-grey-800 mb-2">Subject I Teach:</label>
+                        <input type="text" id="teacherSubjectInput" class="input-field" placeholder="e.g., Physics, Math">
+                    </div>
+                </div>
+                <button id="saveProfileButton" class="btn-primary-custom">Save My Profile</button>
+            </section>
+
+            <section class="card-container">
                 <h3 class="text-2xl font-bold mb-6 text-gray-800">2. Manage Groups</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div>
@@ -70,7 +85,12 @@
                     </div>
                     <button id="addNewStudentButton" class="btn-primary-custom">Add New Student</button>
         
-                    <h4 class="text-xl font-bold mt-8 mb-4 text-gray-800">All Students in this Group:</h4>
+                    <div class="mt-8">
+                        <label for="studentSearchInput" class="block text-sm font-semibold text-grey-800 mb-2">Search for a Student:</label>
+                        <input type="search" id="studentSearchInput" class="input-field" placeholder="Type a name to search...">
+                    </div>
+
+                    <h4 class="text-xl font-bold mt-4 mb-4 text-gray-800">All Students in this Group:</h4>
                     <div id="studentsListDisplay" class="space-y-4"></div>
                 </section>
         

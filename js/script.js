@@ -14,9 +14,9 @@ const app = firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // --- Global State ---
-let TEACHER_ID = null; // سيتم تعيينه بعد تسجيل الدخول
-let SELECTED_GROUP_ID = null; // سيتم تعيينه بعد اختيار المجموعة
-let allStudents = []; // يخزن طلاب المجموعة المحددة
+let TEACHER_ID = null;
+let SELECTED_GROUP_ID = null;
+let allStudents = [];
 
 // --- Utility Functions ---
 function showMessageBox(message) {
@@ -33,13 +33,12 @@ function showMessageBox(message) {
 
 // --- Event Listeners ---
 document.addEventListener('DOMContentLoaded', function() {
-    // Listeners الأساسية
     document.getElementById('setTeacherButton').addEventListener('click', setTeacher);
+    document.getElementById('saveProfileButton').addEventListener('click', saveTeacherProfile);
     document.getElementById('addNewGroupButton').addEventListener('click', addNewGroup);
     document.getElementById('groupSelect').addEventListener('change', handleGroupSelection);
-    
-    // Listeners المعتمدة على اختيار المجموعة
     document.getElementById('addNewStudentButton').addEventListener('click', addNewStudent);
+    document.getElementById('studentSearchInput').addEventListener('input', handleStudentSearch);
     document.getElementById('attendanceDateInput').addEventListener('change', renderAttendanceInputs);
     document.getElementById('saveDailyAttendanceButton').addEventListener('click', saveDailyAttendance);
     document.getElementById('assignmentSelect').addEventListener('change', renderGradesInputs);
@@ -48,19 +47,58 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('addClassScheduleButton').addEventListener('click', addClassSchedule);
 });
 
-// --- 1. Teacher Login ---
-function setTeacher() {
+// --- 1. Teacher Login & Profile ---
+async function setTeacher() {
     const phone = document.getElementById('teacherPhoneInput').value.trim();
     if (phone) {
         TEACHER_ID = phone;
-        document.getElementById('dashboardTitle').innerText = `Welcome, ${TEACHER_ID}`;
-        document.getElementById('mainContent').classList.remove('hidden');
         document.getElementById('teacherPhoneInput').disabled = true;
         document.getElementById('setTeacherButton').disabled = true;
-        showMessageBox(`Dashboard loaded for ${TEACHER_ID}`);
+
+        try {
+            const teacherDoc = await db.collection('teachers').doc(TEACHER_ID).get();
+            if (teacherDoc.exists) {
+                const teacherData = teacherDoc.data();
+                document.getElementById('dashboardTitle').innerText = `Welcome, ${teacherData.name || TEACHER_ID}`;
+                document.getElementById('teacherNameInput').value = teacherData.name || '';
+                document.getElementById('teacherSubjectInput').value = teacherData.subject || '';
+            } else {
+                document.getElementById('dashboardTitle').innerText = `Welcome, ${TEACHER_ID}`;
+                showMessageBox('Please complete your profile information.');
+            }
+        } catch (error) {
+            console.error("Error fetching teacher profile:", error);
+            document.getElementById('dashboardTitle').innerText = `Welcome, ${TEACHER_ID}`;
+        }
+        
+        document.getElementById('mainContent').classList.remove('hidden');
         fetchGroups();
     } else {
         showMessageBox('Please enter a valid phone number.');
+    }
+}
+
+async function saveTeacherProfile() {
+    if (!TEACHER_ID) return;
+    
+    const teacherName = document.getElementById('teacherNameInput').value.trim();
+    const teacherSubject = document.getElementById('teacherSubjectInput').value.trim();
+
+    if (teacherName && teacherSubject) {
+        try {
+            await db.collection('teachers').doc(TEACHER_ID).set({
+                name: teacherName,
+                subject: teacherSubject
+            }, { merge: true });
+            
+            showMessageBox('Profile saved successfully!');
+            document.getElementById('dashboardTitle').innerText = `Welcome, ${teacherName}`;
+        } catch (error) {
+            console.error("Error saving profile:", error);
+            showMessageBox('Failed to save profile.');
+        }
+    } else {
+        showMessageBox('Please enter your name and the subject you teach.');
     }
 }
 
@@ -69,7 +107,7 @@ async function fetchGroups() {
     try {
         const groupsSnapshot = await db.collection(`teachers/${TEACHER_ID}/groups`).get();
         const groupSelect = document.getElementById('groupSelect');
-        groupSelect.innerHTML = '<option value="">-- Select a Group --</option>'; // Reset
+        groupSelect.innerHTML = '<option value="">-- Select a Group --</option>';
         
         groupsSnapshot.docs.forEach(doc => {
             const option = document.createElement('option');
@@ -91,7 +129,7 @@ async function addNewGroup() {
             await db.collection(`teachers/${TEACHER_ID}/groups`).add({ name: groupName });
             showMessageBox('Group added successfully!');
             document.getElementById('newGroupName').value = '';
-            fetchGroups(); // Refresh the dropdown
+            fetchGroups();
         } catch (error) {
             console.error('Error adding group:', error);
             showMessageBox('Failed to add group.');
@@ -107,11 +145,9 @@ function handleGroupSelection() {
     
     if (SELECTED_GROUP_ID) {
         groupContent.classList.remove('hidden');
-        // جلب كل البيانات لهذه المجموعة
         fetchStudents();
         fetchAssignments();
         fetchRecentSchedules();
-        // مسح البيانات القديمة
         document.getElementById('attendanceStudentsContainer').innerHTML = '';
         document.getElementById('gradesStudentsContainer').innerHTML = '';
         document.getElementById('attendanceDateInput').value = '';
@@ -151,13 +187,21 @@ function renderStudentsList(containerElement, students) {
         `;
         containerElement.appendChild(studentElement);
         studentElement.querySelector('.delete-student-btn').addEventListener('click', function() {
-            const studentId = this.dataset.studentId;
-            const studentName = this.dataset.studentName;
-            if (confirm(`Are you sure you want to delete ${studentName}?`)) {
-                deleteStudent(studentId);
+            if (confirm(`Are you sure you want to delete ${this.dataset.studentName}?`)) {
+                deleteStudent(this.dataset.studentId);
             }
         });
     });
+}
+
+function handleStudentSearch(event) {
+    const searchTerm = event.target.value.toLowerCase();
+    if (!searchTerm) {
+        renderStudentsList(document.getElementById('studentsListDisplay'), allStudents);
+        return;
+    }
+    const filteredStudents = allStudents.filter(student => student.name.toLowerCase().includes(searchTerm));
+    renderStudentsList(document.getElementById('studentsListDisplay'), filteredStudents);
 }
 
 async function addNewStudent() {
@@ -174,7 +218,7 @@ async function addNewStudent() {
             showMessageBox('New student added to group!');
             document.getElementById('newStudentName').value = '';
             document.getElementById('newParentPhoneNumber').value = '';
-            fetchStudents(); // Refresh list
+            fetchStudents();
         } catch (error) {
             console.error('Error adding student:', error);
             showMessageBox('Failed to add student.');
@@ -189,7 +233,7 @@ async function deleteStudent(studentId) {
     try {
         await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`).doc(studentId).delete();
         showMessageBox('Student deleted successfully!');
-        fetchStudents(); // Refresh list
+        fetchStudents();
     } catch (error) {
         console.error('Error deleting student:', error);
         showMessageBox('Failed to delete student.');
@@ -199,23 +243,22 @@ async function deleteStudent(studentId) {
 // --- 4. Attendance Management ---
 async function renderAttendanceInputs() {
     const attendanceDate = document.getElementById('attendanceDateInput').value;
-    const attendanceStudentsContainer = document.getElementById('attendanceStudentsContainer');
-    attendanceStudentsContainer.innerHTML = ''; 
+    const container = document.getElementById('attendanceStudentsContainer');
+    container.innerHTML = ''; 
 
     if (!attendanceDate) {
-        attendanceStudentsContainer.innerHTML = '<p class="text-grey-600 text-center">Please select a date.</p>';
+        container.innerHTML = '<p class="text-grey-600 text-center">Please select a date.</p>';
         return;
     }
     if (allStudents.length === 0) {
-        attendanceStudentsContainer.innerHTML = '<p class="text-grey-600 text-center">No students available in this group.</p>';
+        container.innerHTML = '<p class="text-grey-600 text-center">No students available in this group.</p>';
         return;
     }
 
     let existingAttendance = {};
     try {
-        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/dailyAttendance`).doc(attendanceDate);
-        const doc = await docRef.get();
-        if (doc.exists && doc.data() && doc.data().records) {
+        const doc = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/dailyAttendance`).doc(attendanceDate).get();
+        if (doc.exists && doc.data().records) {
             doc.data().records.forEach(record => {
                 existingAttendance[record.studentId] = record.status;
             });
@@ -225,24 +268,20 @@ async function renderAttendanceInputs() {
     }
 
     allStudents.forEach(student => {
-        const studentRow = document.createElement('div');
-        studentRow.className = 'student-row';
-        // --- هذا هو السطر الذي تم تعديله ---
-        studentRow.innerHTML = `
+        const row = document.createElement('div');
+        row.className = 'student-row';
+        row.innerHTML = `
             <span class="student-name">${student.name}</span>
             <select class="attendance-status-select" data-student-id="${student.id}">
-                <option value="absent" selected>Absent</option>
+                <option value="absent">Absent</option>
                 <option value="present">Present</option>
                 <option value="late">Late</option>
             </select>
         `;
-        attendanceStudentsContainer.appendChild(studentRow);
+        container.appendChild(row);
 
-        const selectElement = studentRow.querySelector('.attendance-status-select');
-        // هذا الجزء سيتأكد من عرض الحالة المحفوظة سابقاً إذا وجدت
-        if (existingAttendance[student.id]) {
-            selectElement.value = existingAttendance[student.id];
-        }
+        const select = row.querySelector('.attendance-status-select');
+        select.value = existingAttendance[student.id] || 'absent';
     });
 }
 
@@ -253,16 +292,14 @@ async function saveDailyAttendance() {
         showMessageBox('Please select a date.');
         return;
     }
-    const recordsToSave = [];
-    document.querySelectorAll('#attendanceStudentsContainer .attendance-status-select').forEach(selectElement => {
-        const studentId = selectElement.dataset.studentId;
-        const status = selectElement.value;
-        recordsToSave.push({ studentId, status });
+    const records = [];
+    document.querySelectorAll('#attendanceStudentsContainer .attendance-status-select').forEach(select => {
+        records.push({ studentId: select.dataset.studentId, status: select.value });
     });
 
     try {
         const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/dailyAttendance`).doc(attendanceDate);
-        await docRef.set({ date: attendanceDate, records: recordsToSave });
+        await docRef.set({ date: attendanceDate, records: records });
         showMessageBox('Attendance saved successfully!');
     } catch (error) {
         console.error('Error saving attendance:', error);
@@ -274,15 +311,14 @@ async function saveDailyAttendance() {
 async function fetchAssignments() {
     if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
     try {
-        const assignmentsSnapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).get();
-        const assignments = assignmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const assignmentSelect = document.getElementById('assignmentSelect');
-        assignmentSelect.innerHTML = '<option value="">Select an Assignment</option>';
-        assignments.forEach(assignment => {
+        const snapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).get();
+        const select = document.getElementById('assignmentSelect');
+        select.innerHTML = '<option value="">Select an Assignment</option>';
+        snapshot.docs.forEach(doc => {
             const option = document.createElement('option');
-            option.value = assignment.id;
-            option.innerText = `${assignment.name} (${assignment.date})`;
-            assignmentSelect.appendChild(option);
+            option.value = doc.id;
+            option.innerText = `${doc.data().name} (${doc.data().date})`;
+            select.appendChild(option);
         });
     } catch (error) {
         console.error('Error loading assignments:', error);
@@ -290,26 +326,25 @@ async function fetchAssignments() {
 }
 
 async function renderGradesInputs() {
-    const selectedAssignmentId = document.getElementById('assignmentSelect').value;
-    const gradesStudentsContainer = document.getElementById('gradesStudentsContainer');
-    gradesStudentsContainer.innerHTML = '';
+    const assignmentId = document.getElementById('assignmentSelect').value;
+    const container = document.getElementById('gradesStudentsContainer');
+    container.innerHTML = '';
 
-    if (!selectedAssignmentId) {
-        gradesStudentsContainer.innerHTML = '<p class="text-grey-600 text-center">Please select an assignment.</p>';
+    if (!assignmentId) {
+        container.innerHTML = '<p class="text-grey-600 text-center">Please select an assignment.</p>';
         return;
     }
     if (allStudents.length === 0) {
-        gradesStudentsContainer.innerHTML = '<p class="text-grey-600 text-center">No students available in this group.</p>';
+        container.innerHTML = '<p class="text-grey-600 text-center">No students available.</p>';
         return;
     }
     
     let existingGrades = {};
      try {
-        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).doc(selectedAssignmentId);
-        const doc = await docRef.get();
-        if (doc.exists && doc.data() && doc.data().scores) {
-            doc.data().scores.forEach(scoreRecord => {
-                existingGrades[scoreRecord.studentId] = scoreRecord.score;
+        const doc = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).doc(assignmentId).get();
+        if (doc.exists && doc.data().scores) {
+            doc.data().scores.forEach(score => {
+                existingGrades[score.studentId] = score.score;
             });
         }
     } catch (error) {
@@ -317,34 +352,36 @@ async function renderGradesInputs() {
     }
 
     allStudents.forEach(student => {
-        const studentRow = document.createElement('div');
-        studentRow.className = 'student-row';
-        studentRow.innerHTML = `
+        const row = document.createElement('div');
+        row.className = 'student-row';
+        row.innerHTML = `
             <span class="student-name">${student.name}</span>
             <input type="number" class="grade-input" data-student-id="${student.id}" min="0" max="100" placeholder="Score">
         `;
-        gradesStudentsContainer.appendChild(studentRow);
+        container.appendChild(row);
         
-        const inputElement = studentRow.querySelector('.grade-input');
+        const input = row.querySelector('.grade-input');
         if (existingGrades[student.id] !== undefined) {
-            inputElement.value = existingGrades[student.id];
+            input.value = existingGrades[student.id];
         }
     });
 }
 
 async function addNewAssignment() {
     if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const assignmentName = document.getElementById('newAssignmentName').value.trim();
-    const assignmentDate = document.getElementById('newAssignmentDate').value;
-    if (assignmentName && assignmentDate) {
+    const name = document.getElementById('newAssignmentName').value.trim();
+    const date = document.getElementById('newAssignmentDate').value;
+    if (name && date) {
         try {
             await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).add({
-                name: assignmentName,
-                date: assignmentDate,
+                name: name,
+                date: date,
                 scores: []
             });
             showMessageBox('New assignment added!');
-            fetchAssignments(); // Refresh dropdown
+            fetchAssignments();
+            document.getElementById('newAssignmentName').value = '';
+            document.getElementById('newAssignmentDate').value = '';
         } catch (error) {
             console.error('Error adding assignment:', error);
         }
@@ -354,24 +391,22 @@ async function addNewAssignment() {
 }
 
 async function saveAssignmentGrades() {
-    const selectedAssignmentId = document.getElementById('assignmentSelect').value;
-    if (!TEACHER_ID || !SELECTED_GROUP_ID || !selectedAssignmentId) {
+    const assignmentId = document.getElementById('assignmentSelect').value;
+    if (!TEACHER_ID || !SELECTED_GROUP_ID || !assignmentId) {
         showMessageBox('Please select an assignment first.');
         return;
     }
 
-    const scoresToSave = [];
+    const scores = [];
     document.querySelectorAll('#gradesStudentsContainer .grade-input').forEach(input => {
-        const studentId = input.dataset.studentId;
-        const score = input.value;
-        if (score !== '') { // Only save if a score is entered
-            scoresToSave.push({ studentId, score: parseInt(score, 10) });
+        if (input.value !== '') {
+            scores.push({ studentId: input.dataset.studentId, score: parseInt(input.value, 10) });
         }
     });
     
     try {
-        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).doc(selectedAssignmentId);
-        await docRef.update({ scores: scoresToSave });
+        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).doc(assignmentId);
+        await docRef.update({ scores: scores });
         showMessageBox('Grades saved successfully!');
     } catch(error) {
         console.error('Error saving grades:', error);
@@ -379,26 +414,24 @@ async function saveAssignmentGrades() {
     }
 }
 
-
 // --- 6. Class Schedule Management ---
 async function fetchRecentSchedules() {
     if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const scheduleDisplayContainer = document.getElementById('classScheduleDisplay');
-    scheduleDisplayContainer.innerHTML = '<p class="text-grey-600 text-center">Loading schedules...</p>';
+    const container = document.getElementById('classScheduleDisplay');
+    container.innerHTML = '<p class="text-grey-600 text-center">Loading schedules...</p>';
     try {
-        const scheduleSnapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/classSchedule`).orderBy('date', 'desc').limit(5).get();
-        const schedules = scheduleSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        scheduleDisplayContainer.innerHTML = ''; // Clear loading message
+        const snapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/classSchedule`).orderBy('date', 'desc').limit(5).get();
+        container.innerHTML = '';
 
-        if (schedules.length === 0) {
-            scheduleDisplayContainer.innerHTML = '<p class="text-grey-600 text-center">No schedules for this group.</p>';
+        if (snapshot.docs.length === 0) {
+            container.innerHTML = '<p class="text-grey-600 text-center">No schedules for this group.</p>';
             return;
         }
-        schedules.forEach(record => {
-            const recordElement = document.createElement('div');
-            recordElement.className = 'record-item';
-            // This is the improved display for schedules
-            recordElement.innerHTML = `
+        snapshot.docs.forEach(doc => {
+            const record = doc.data();
+            const element = document.createElement('div');
+            element.className = 'record-item';
+            element.innerHTML = `
                 <div>
                     <p class="font-semibold text-grey-800">${record.subject}</p>
                     <p class="text-sm text-grey-600">Date: ${record.date} at ${record.time}</p>
@@ -406,11 +439,11 @@ async function fetchRecentSchedules() {
                 </div>
                 <span class="font-bold text-grey-800">Scheduled</span>
             `;
-            scheduleDisplayContainer.appendChild(recordElement);
+            container.appendChild(element);
         });
     } catch (error) {
         console.error('Error fetching schedules:', error);
-        scheduleDisplayContainer.innerHTML = '<p class="text-primary-red text-center">Failed to load schedules.</p>';
+        container.innerHTML = '<p class="text-primary-red text-center">Failed to load schedules.</p>';
     }
 }
 
@@ -424,7 +457,11 @@ async function addClassSchedule() {
         try {
             await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/classSchedule`).add({ subject, date, time, room });
             showMessageBox('Schedule added successfully!');
-            fetchRecentSchedules(); // Refresh schedule list
+            fetchRecentSchedules();
+            document.getElementById('classSubject').value = '';
+            document.getElementById('classDate').value = '';
+            document.getElementById('classTime').value = '';
+            document.getElementById('classRoom').value = '';
         } catch (error) {
             console.error('Error adding schedule:', error);
             showMessageBox('Failed to add schedule.');
