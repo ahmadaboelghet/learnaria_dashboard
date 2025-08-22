@@ -1,4 +1,3 @@
-// --- Firebase Configuration ---
 const firebaseConfig = {
   apiKey: "AIzaSyAbN4awHvNUZWC-uCgU_hR7iYiHk-3dpv8",
   authDomain: "learnaria-483e7.firebaseapp.com",
@@ -9,17 +8,120 @@ const firebaseConfig = {
   measurementId: "G-T68CEZS4YC"
 };
 
-// Initialize Firebase
 const app = firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const firestoreDB = firebase.firestore();
 
-// --- Global State ---
+const DB_NAME = 'LearnariaDB';
+const DB_VERSION = 2;
+let localDB;
+
+function openDB() {
+    if (localDB) {
+        return Promise.resolve(localDB);
+    }
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            try {
+                if (!db.objectStoreNames.contains('teachers')) {
+                    db.createObjectStore('teachers', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('groups')) {
+                    const store = db.createObjectStore('groups', { keyPath: 'id' });
+                    store.createIndex('teacherId', 'teacherId', { unique: false });
+                }
+                if (!db.objectStoreNames.contains('students')) {
+                    const store = db.createObjectStore('students', { keyPath: 'id' });
+                    store.createIndex('groupId', 'groupId', { unique: false });
+                }
+                if (!db.objectStoreNames.contains('assignments')) {
+                    const store = db.createObjectStore('assignments', { keyPath: 'id' });
+                    store.createIndex('groupId', 'groupId', { unique: false });
+                }
+                if (!db.objectStoreNames.contains('attendance')) {
+                     db.createObjectStore('attendance', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('schedules')) {
+                     const store = db.createObjectStore('schedules', { keyPath: 'id' });
+                     store.createIndex('groupId', 'groupId', { unique: false });
+                }
+                if (!db.objectStoreNames.contains('scheduleExceptions')) {
+                     db.createObjectStore('scheduleExceptions', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('syncQueue')) {
+                    db.createObjectStore('syncQueue', { autoIncrement: true });
+                }
+            } catch (e) {
+                console.error("Error during DB upgrade:", e);
+                reject(e);
+            }
+        };
+        request.onsuccess = event => {
+            localDB = event.target.result;
+            console.log("Database opened successfully.");
+            resolve(localDB);
+        };
+        request.onerror = event => {
+            const error = event.target.error;
+            console.error(`IndexedDB error: ${error.name} - ${error.message}`);
+            alert("Could not open the local database. This can happen in private browsing mode or if storage permissions are denied. The app may not work correctly offline.");
+            reject(error);
+        };
+    });
+}
+
+async function getFromDB(storeName, key) {
+    if (!localDB) await openDB();
+    const tx = localDB.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
+    return new Promise((resolve, reject) => {
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = (event) => reject(event.target.error);
+    });
+}
+
+async function getAllFromDB(storeName, indexName, key) {
+    if (!localDB) await openDB();
+    const tx = localDB.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
+    const index = store.index(indexName);
+    return new Promise((resolve, reject) => {
+        const req = index.getAll(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = (event) => reject(event.target.error);
+    });
+}
+
+async function putToDB(storeName, data) {
+    if (!localDB) await openDB();
+    const tx = localDB.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.put(data);
+    return tx.complete;
+}
+
+async function deleteFromDB(storeName, key) {
+    if (!localDB) await openDB();
+    const tx = localDB.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.delete(key);
+    return tx.complete;
+}
+
 let TEACHER_ID = null;
 let SELECTED_GROUP_ID = null;
 let allStudents = [];
-let currentLang = 'ar'; // Default language
+let currentLang = 'ar';
+let isSyncing = false;
 
-// --- Translations Dictionary ---
+let statusIndicator, syncIndicator;
+let qrCodeModal, scannerModal, videoElement;
+let currentScannerMode = null; 
+let animationFrameId = null;
+let isScannerPaused = false;
+
 const translations = {
     ar: {
         pageTitle: "ليرناريا - لوحة تحكم المعلم",
@@ -56,6 +158,7 @@ const translations = {
         addRecurringScheduleTitle: "إضافة جدول متكرر جديد",
         subjectLabel: "المادة:",
         timeLabel: "الوقت:",
+        locationLabel: "المكان:",
         selectDaysLabel: "اختر أيام الأسبوع:",
         saveRecurringScheduleButton: "حفظ الجدول المتكرر",
         mySchedulesLabel: "جداولي المتكررة:",
@@ -68,6 +171,7 @@ const translations = {
         phonePlaceholder: "أدخل رقم هاتفك (مثال: +201001234567)",
         fullNamePlaceholder: "أدخل اسمك الكامل",
         subjectPlaceholder: "مثال: فيزياء، رياضيات",
+        locationPlaceholder: "مثال: أونلاين، سنتر الياسمين",
         groupNamePlaceholder: "مثال: الصف الأول - صباحي",
         newStudentPlaceholder: "أدخل اسم الطالب الجديد",
         parentPhonePlaceholder: "مثال: +201001234567",
@@ -124,7 +228,21 @@ const translations = {
         loadingSchedules: "جاري تحميل الجداول...",
         noSchedulesYet: "لا توجد جداول متكررة لهذه المجموعة بعد.",
         repeatsOn: "تتكرر في:",
-        days: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+        days: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+        tabProfile: "الملف الشخصي",
+        tabStudents: "الطلاب",
+        tabAttendance: "الحضور",
+        tabGrades: "الدرجات",
+        tabSchedule: "الجدول",
+        onlineStatus: "متصل",
+        offlineStatus: "غير متصل",
+        syncStatusSynced: "تمت المزامنة",
+        syncStatusSyncing: "جاري المزامنة...",
+        syncStatusPending: "{count} تغييرات بانتظار المزامنة",
+        scanAttendanceQR: "مسح الحضور بـ QR",
+        scanHomeworkQR: "مسح تسليم الواجب بـ QR",
+        phoneMissing: "الرجاء إدخال رقم الهاتف.",
+        logoutButton: "تسجيل الخروج"
     },
     en: {
         pageTitle: "Learnaria - Teacher Dashboard",
@@ -161,6 +279,7 @@ const translations = {
         addRecurringScheduleTitle: "Add New Recurring Schedule",
         subjectLabel: "Subject:",
         timeLabel: "Time:",
+        locationLabel: "Location:",
         selectDaysLabel: "Select Days of the Week:",
         saveRecurringScheduleButton: "Save Recurring Schedule",
         mySchedulesLabel: "My Recurring Schedules:",
@@ -173,6 +292,7 @@ const translations = {
         phonePlaceholder: "Enter your phone number (e.g., +1234567890)",
         fullNamePlaceholder: "Enter your full name",
         subjectPlaceholder: "e.g., Physics, Math",
+        locationPlaceholder: "e.g., Online, Jasmine Center",
         groupNamePlaceholder: "e.g., Grade 10 - Morning",
         newStudentPlaceholder: "Enter new student name",
         parentPhonePlaceholder: "e.g., +1234567890",
@@ -229,13 +349,30 @@ const translations = {
         loadingSchedules: "Loading schedules...",
         noSchedulesYet: "No recurring schedules set for this group yet.",
         repeatsOn: "Repeats on:",
-        days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        tabProfile: "Profile",
+        tabStudents: "Students",
+        tabAttendance: "Attendance",
+        tabGrades: "Grades",
+        tabSchedule: "Schedule",
+        onlineStatus: "Online",
+        offlineStatus: "Offline",
+        syncStatusSynced: "Synced",
+        syncStatusSyncing: "Syncing...",
+        syncStatusPending: "{count} changes pending",
+        scanAttendanceQR: "Scan Attendance with QR",
+        scanHomeworkQR: "Scan Homework with QR",
+        phoneMissing: "Please enter your phone number.",
+        logoutButton: "Logout"
     }
 };
 
-// --- Utility Functions ---
 function showMessageBox(messageKey) {
     const message = translations[currentLang][messageKey] || messageKey;
+    const existingBox = document.querySelector('.message-box');
+    if (existingBox) {
+        existingBox.remove();
+    }
     const messageBox = document.createElement('div');
     messageBox.className = 'message-box';
     messageBox.innerText = message;
@@ -247,31 +384,133 @@ function showMessageBox(messageKey) {
     }, 3000);
 }
 
-// --- Language and Theme Management ---
+function generateUniqueId() {
+    return `offline_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function updateOnlineStatus() {
+    const onlineText = translations[currentLang].onlineStatus || 'Online';
+    const offlineText = translations[currentLang].offlineStatus || 'Offline';
+    if (navigator.onLine) {
+        statusIndicator.classList.add('online');
+        statusIndicator.classList.remove('offline');
+        statusIndicator.querySelector('.status-text').textContent = onlineText;
+    } else {
+        statusIndicator.classList.remove('online');
+        statusIndicator.classList.add('offline');
+        statusIndicator.querySelector('.status-text').textContent = offlineText;
+    }
+    updateSyncIndicator();
+}
+
+async function updateSyncIndicator() {
+    const syncingText = translations[currentLang].syncStatusSyncing;
+    const syncedText = translations[currentLang].syncStatusSynced;
+    const pendingTextTemplate = translations[currentLang].syncStatusPending;
+    if (isSyncing) {
+        syncIndicator.innerHTML = `
+            <svg class="icon-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 4l5 5M20 20l-5-5"></path></svg>
+            <span>${syncingText}</span>
+        `;
+        return;
+    }
+    try {
+        if (!localDB) await openDB();
+        const tx = localDB.transaction('syncQueue', 'readonly');
+        const store = tx.objectStore('syncQueue');
+        const countReq = store.count();
+        countReq.onsuccess = () => {
+            const count = countReq.result;
+            if (count > 0) {
+                const pendingText = pendingTextTemplate.replace('{count}', count);
+                syncIndicator.innerHTML = `
+                    <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+                    <span>${pendingText}</span>
+                `;
+            } else {
+                syncIndicator.innerHTML = `
+                    <svg class="h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span>${syncedText}</span>
+                `;
+            }
+        };
+    } catch (error) {
+        console.error("Could not update sync indicator:", error);
+    }
+}
+
+async function addToSyncQueue(action) {
+    await putToDB('syncQueue', action);
+    showMessageBox("تم الحفظ محليًا وسيتم المزامنة عند توفر الإنترنت.");
+    updateSyncIndicator();
+}
+
+async function processSyncQueue() {
+ if (!navigator.onLine || isSyncing) return;
+    isSyncing = true;
+    await updateSyncIndicator();
+    try {
+        if (!localDB) await openDB();
+        
+        const tx = localDB.transaction('syncQueue', 'readwrite');
+        const store = tx.objectStore('syncQueue');
+
+        const getAllKeysPromise = new Promise((resolve, reject) => {
+            const request = store.getAllKeys();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        const getAllValuesPromise = new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        const [keys, values] = await Promise.all([getAllKeysPromise, getAllValuesPromise]);
+
+        const actions = values.map((val, i) => ({ ...val, key: keys[i] }));
+
+        if (actions.length > 0) {
+            for (const action of actions) {
+                const { type, path, data, id, key } = action;
+                if (type === 'set') {
+                    await firestoreDB.doc(path).set(data, { merge: true });
+                } else if (type === 'add') {
+                    await firestoreDB.collection(path).doc(id).set(data);
+                } else if (type === 'delete') {
+                    await firestoreDB.doc(path).delete();
+                }
+                await deleteFromDB('syncQueue', key);
+            }
+        }
+    } catch (error) {
+        console.error("Error processing sync queue:", error);
+    } finally {
+        isSyncing = false;
+        await updateSyncIndicator();
+    }
+}
+
 function setLanguage(lang) {
     currentLang = lang;
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-
     document.querySelectorAll('[data-key]').forEach(elem => {
         const key = elem.getAttribute('data-key');
-        elem.innerText = translations[lang][key];
+        if (translations[lang][key]) elem.innerText = translations[lang][key];
     });
-
     document.querySelectorAll('[data-key-placeholder]').forEach(elem => {
         const key = elem.getAttribute('data-key-placeholder');
-        elem.placeholder = translations[lang][key];
+        if (translations[lang][key]) elem.placeholder = translations[lang][key];
     });
-    
     document.getElementById('languageToggleButton').innerText = lang === 'ar' ? 'EN' : 'ع';
-
-    // Refresh dynamic content
+    updateOnlineStatus();
     renderDayCheckboxes();
     if (TEACHER_ID) {
         fetchGroups();
     }
     if (SELECTED_GROUP_ID) {
-        // Use async/await to ensure students are loaded before rendering
         (async () => {
             await fetchStudents();
             fetchAssignments();
@@ -291,12 +530,16 @@ function toggleLanguage() {
 function loadInitialPreferences() {
     const savedLang = localStorage.getItem('learnaria-lang') || 'ar';
     setLanguage(savedLang);
-
     const isDarkMode = localStorage.getItem('learnaria-darkMode') === 'true';
     if (isDarkMode) {
         document.body.classList.add('dark-mode');
     }
     updateDarkModeIcons(isDarkMode);
+    const lastTeacherId = localStorage.getItem('learnaria-teacherId');
+    if(lastTeacherId) {
+        document.getElementById('teacherPhoneInput').value = lastTeacherId;
+        setTeacher();
+    }
 }
 
 function toggleDarkMode() {
@@ -318,8 +561,47 @@ function updateDarkModeIcons(isDarkMode) {
     }
 }
 
-// --- Event Listeners ---
-document.addEventListener('DOMContentLoaded', function() {
+function initializeTabs() {
+    const tabsNav = document.getElementById('tabs-nav');
+    const tabButtons = tabsNav.querySelectorAll('.tab-button');
+    const tabContents = document.getElementById('tabs-content').querySelectorAll('.tab-content');
+    tabsNav.addEventListener('click', (e) => {
+        const targetButton = e.target.closest('.tab-button');
+        if (!targetButton || targetButton.disabled) return;
+        const tabName = targetButton.dataset.tab;
+        tabButtons.forEach(button => button.classList.remove('active'));
+        targetButton.classList.add('active');
+        tabContents.forEach(content => {
+            if (content.id === `tab-${tabName}`) {
+                content.classList.remove('hidden');
+            } else {
+                content.classList.add('hidden');
+            }
+        });
+    });
+}
+
+function logout() {
+    localStorage.removeItem('learnaria-teacherId');
+    location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+    statusIndicator = document.getElementById('statusIndicator');
+    syncIndicator = document.getElementById('syncIndicator');
+    qrCodeModal = document.getElementById('qrCodeModal');
+    scannerModal = document.getElementById('scannerModal');
+    videoElement = document.getElementById('scannerVideo');
+    
+    try {
+        await openDB();
+    } catch (error) {
+        console.error("Initial database open failed. App might be unstable.");
+    }
+    initializeTabs();
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
     document.getElementById('setTeacherButton').addEventListener('click', setTeacher);
     document.getElementById('saveProfileButton').addEventListener('click', saveTeacherProfile);
     document.getElementById('addNewGroupButton').addEventListener('click', addNewGroup);
@@ -334,24 +616,29 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('addRecurringScheduleButton').addEventListener('click', saveRecurringSchedule);
     document.getElementById('updateSingleClassButton').addEventListener('click', updateSingleClass);
     document.getElementById('cancelSingleClassButton').addEventListener('click', cancelSingleClass);
-    
     document.getElementById('darkModeToggleButton').addEventListener('click', toggleDarkMode);
     document.getElementById('languageToggleButton').addEventListener('click', toggleLanguage);
-    
-    loadInitialPreferences();
+    document.getElementById('logoutButton').addEventListener('click', logout);
     addEnterKeyListeners();
+    document.getElementById('closeQrModal').addEventListener('click', () => qrCodeModal.classList.add('hidden'));
+    document.getElementById('closeScannerModal').addEventListener('click', stopScanner);
+    document.getElementById('scanAttendanceButton').addEventListener('click', () => startScanner('attendance'));
+    document.getElementById('scanHomeworkButton').addEventListener('click', () => startScanner('homework'));
+    document.getElementById('printIdButton').addEventListener('click', () => window.print());
+    window.addEventListener('online', processSyncQueue);
+    loadInitialPreferences();
+    processSyncQueue();
 });
-
 
 function renderDayCheckboxes() {
     const container = document.getElementById('daysOfWeekContainer');
     const days = translations[currentLang].days;
     container.innerHTML = '';
-    days.forEach(day => {
+    days.forEach((day, index) => {
         const label = document.createElement('label');
         label.className = 'day-checkbox-container';
         label.innerHTML = `
-            <input type="checkbox" class="day-checkbox" value="${day}">
+            <input type="checkbox" class="day-checkbox" value="${index}">
             <span>${day}</span>
         `;
         container.appendChild(label);
@@ -377,149 +664,171 @@ function addEnterKeyListeners() {
     listenForEnter('exceptionNewTime', updateSingleClass);
 }
 
-// --- 1. Teacher Login & Profile ---
 async function setTeacher() {
-    const phone = document.getElementById('teacherPhoneInput').value.trim();
-    if (phone) {
+    try {
+        const phone = document.getElementById('teacherPhoneInput').value.trim();
+        if (!phone) {
+            showMessageBox('phoneMissing');
+            return;
+        }
         TEACHER_ID = phone;
+        localStorage.setItem('learnaria-teacherId', TEACHER_ID);
         document.getElementById('teacherPhoneInput').disabled = true;
         document.getElementById('setTeacherButton').disabled = true;
-
-        try {
-            const teacherDoc = await db.collection('teachers').doc(TEACHER_ID).get();
-            const welcomeMsg = translations[currentLang].welcomeMessage;
+        document.getElementById('logoutButton').classList.remove('hidden');
+        let teacherData = await getFromDB('teachers', TEACHER_ID);
+        if (navigator.onLine) {
+            const teacherDoc = await firestoreDB.collection('teachers').doc(TEACHER_ID).get();
             if (teacherDoc.exists) {
-                const teacherData = teacherDoc.data();
-                document.getElementById('dashboardTitle').innerText = `${welcomeMsg} ${teacherData.name || TEACHER_ID}`;
-                document.getElementById('teacherNameInput').value = teacherData.name || '';
-                document.getElementById('teacherSubjectInput').value = teacherData.subject || '';
-            } else {
-                document.getElementById('dashboardTitle').innerText = `${welcomeMsg} ${TEACHER_ID}`;
-                showMessageBox('completeProfileMessage');
+                const remoteData = { id: teacherDoc.id, ...teacherDoc.data() };
+                teacherData = remoteData;
+                await putToDB('teachers', remoteData);
             }
-        } catch (error) {
-            console.error("Error fetching teacher profile:", error);
-            document.getElementById('dashboardTitle').innerText = `${translations[currentLang].welcomeMessage} ${TEACHER_ID}`;
         }
-        
+        const welcomeMsg = translations[currentLang].welcomeMessage;
+        if (teacherData) {
+            document.getElementById('dashboardTitle').innerText = `${welcomeMsg} ${teacherData.name || TEACHER_ID}`;
+            document.getElementById('teacherNameInput').value = teacherData.name || '';
+            document.getElementById('teacherSubjectInput').value = teacherData.subject || '';
+        } else {
+            document.getElementById('dashboardTitle').innerText = `${welcomeMsg} ${TEACHER_ID}`;
+            showMessageBox('completeProfileMessage');
+        }
         document.getElementById('mainContent').classList.remove('hidden');
         fetchGroups();
-    } else {
-        showMessageBox('phoneMissing');
+    } catch (error) {
+        console.error("Error setting teacher:", error);
+        showMessageBox("فشل تحميل بيانات المدرس.");
     }
 }
 
 async function saveTeacherProfile() {
-    if (!TEACHER_ID) return;
-    const teacherName = document.getElementById('teacherNameInput').value.trim();
-    const teacherSubject = document.getElementById('teacherSubjectInput').value.trim();
-
-    if (teacherName && teacherSubject) {
-        try {
-            await db.collection('teachers').doc(TEACHER_ID).set({
-                name: teacherName,
-                subject: teacherSubject
-            }, { merge: true });
-            
-            showMessageBox('profileSavedSuccess');
-            document.getElementById('dashboardTitle').innerText = `${translations[currentLang].welcomeMessage} ${teacherName}`;
-        } catch (error) {
-            console.error("Error saving profile:", error);
-            showMessageBox('profileSavedError');
+    try {
+        if (!TEACHER_ID) return;
+        const teacherName = document.getElementById('teacherNameInput').value.trim();
+        const teacherSubject = document.getElementById('teacherSubjectInput').value.trim();
+        if (!teacherName || !teacherSubject) {
+            showMessageBox('nameAndSubjectMissing');
+            return;
         }
-    } else {
-        showMessageBox('nameAndSubjectMissing');
+        const profileData = { id: TEACHER_ID, name: teacherName, subject: teacherSubject };
+        await putToDB('teachers', profileData);
+        showMessageBox('profileSavedSuccess');
+        document.getElementById('dashboardTitle').innerText = `${translations[currentLang].welcomeMessage} ${teacherName}`;
+        await addToSyncQueue({
+            type: 'set',
+            path: `teachers/${TEACHER_ID}`,
+            data: { name: teacherName, subject: teacherSubject }
+        });
+        processSyncQueue();
+    } catch (error) {
+        console.error("Error saving profile:", error);
+        showMessageBox('profileSavedError');
     }
 }
 
-// --- 2. Group Management ---
 async function fetchGroups() {
-    if (!TEACHER_ID) return;
     try {
-        const groupsSnapshot = await db.collection(`teachers/${TEACHER_ID}/groups`).get();
-        const groupSelect = document.getElementById('groupSelect');
-        const currentGroup = groupSelect.value;
-        groupSelect.innerHTML = `<option value="">${translations[currentLang].selectGroupOption}</option>`;
-        
-        groupsSnapshot.docs.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.innerText = doc.data().name;
-            groupSelect.appendChild(option);
-        });
-        if(currentGroup) {
-            groupSelect.value = currentGroup;
+        if (!TEACHER_ID) return;
+        let groups = await getAllFromDB('groups', 'teacherId', TEACHER_ID);
+        renderGroupSelect(groups);
+        if (navigator.onLine) {
+            const snapshot = await firestoreDB.collection(`teachers/${TEACHER_ID}/groups`).get();
+            const remoteGroups = snapshot.docs.map(doc => ({ id: doc.id, teacherId: TEACHER_ID, ...doc.data() }));
+            await Promise.all(remoteGroups.map(group => putToDB('groups', group)));
+            renderGroupSelect(remoteGroups);
         }
     } catch (error) {
         console.error('Error fetching groups:', error);
     }
 }
 
-async function addNewGroup() {
-    if (!TEACHER_ID) return;
-    const groupName = document.getElementById('newGroupName').value.trim();
-    if (groupName) {
-        try {
-            await db.collection(`teachers/${TEACHER_ID}/groups`).add({ name: groupName });
-            showMessageBox('groupAddedSuccess');
-            document.getElementById('newGroupName').value = '';
-            fetchGroups();
-        } catch (error) {
-            console.error('Error adding group:', error);
-            showMessageBox('groupAddedError');
-        }
-    } else {
-        showMessageBox('groupNameMissing');
+function renderGroupSelect(groups) {
+    const groupSelect = document.getElementById('groupSelect');
+    const currentGroup = groupSelect.value;
+    groupSelect.innerHTML = `<option value="">${translations[currentLang].selectGroupOption}</option>`;
+    groups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.id;
+        option.innerText = group.name;
+        groupSelect.appendChild(option);
+    });
+    if (currentGroup && groups.some(g => g.id === currentGroup)) {
+        groupSelect.value = currentGroup;
     }
 }
 
+async function addNewGroup() {
+    try {
+        if (!TEACHER_ID) return;
+        const groupName = document.getElementById('newGroupName').value.trim();
+        if (!groupName) {
+            showMessageBox('groupNameMissing');
+            return;
+        }
+        const newGroupId = generateUniqueId();
+        const newGroupData = { id: newGroupId, teacherId: TEACHER_ID, name: groupName };
+        await putToDB('groups', newGroupData);
+        showMessageBox('groupAddedSuccess');
+        document.getElementById('newGroupName').value = '';
+        await fetchGroups();
+        await addToSyncQueue({
+            type: 'add',
+            path: `teachers/${TEACHER_ID}/groups`,
+            id: newGroupId,
+            data: { name: groupName }
+        });
+        processSyncQueue();
+    } catch (error) {
+        console.error("Error adding new group:", error);
+        showMessageBox('groupAddedError');
+    }
+}
 
-// =========================================================================
-// ===                    التعديل الجذري هنا لحل المشكلة               ===
-// =========================================================================
 async function handleGroupSelection() {
     SELECTED_GROUP_ID = document.getElementById('groupSelect').value;
-    const groupContent = document.getElementById('groupContent');
-    
+    const tabs = document.querySelectorAll('#tabs-nav .tab-button');
     if (SELECTED_GROUP_ID) {
-        groupContent.classList.remove('hidden');
-        
-        // الخطوة 1: انتظر اكتمال تحميل الطلاب أولاً وقبل كل شيء
-        await fetchStudents(); 
-        
-        // الخطوة 2: الآن بعد أن تأكدنا من وجود الطلاب، قم بباقي العمليات
+        tabs.forEach(tab => {
+            if (tab.dataset.tab !== 'profile') {
+                tab.disabled = false;
+            }
+        });
+        await fetchStudents();
         fetchAssignments();
         fetchRecurringSchedules();
-
-        // الخطوة 3: حدد تاريخ اليوم واعرض الطلاب في قائمة الحضور
         document.getElementById('attendanceDateInput').value = new Date().toISOString().split('T')[0];
         renderAttendanceInputs();
-        
-        // الخطوة 4: اعرض قائمة الدرجات (ستكون فارغة حتى يتم اختيار واجب)
-        renderGradesInputs(); 
-
+        renderGradesInputs();
+        document.querySelector('.tab-button[data-tab="students"]').click();
     } else {
-        groupContent.classList.add('hidden');
+        tabs.forEach(tab => {
+            if (tab.dataset.tab !== 'profile') {
+                tab.disabled = true;
+            }
+        });
+        document.querySelector('.tab-button[data-tab="profile"]').click();
     }
 }
-// =========================================================================
 
-
-// --- 3. Students Management ---
 async function fetchStudents() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) {
-        allStudents = [];
-        return;
-    };
     try {
-        const studentsSnapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`).get();
-        allStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // عرض الطلاب في القائمة الرئيسية فور تحميلهم
+        if (!SELECTED_GROUP_ID) {
+            allStudents = [];
+            renderStudentsList(document.getElementById('studentsListDisplay'), allStudents);
+            return;
+        }
+        allStudents = await getAllFromDB('students', 'groupId', SELECTED_GROUP_ID);
         renderStudentsList(document.getElementById('studentsListDisplay'), allStudents);
+        if (navigator.onLine) {
+            const snapshot = await firestoreDB.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`).get();
+            const remoteStudents = snapshot.docs.map(doc => ({ id: doc.id, groupId: SELECTED_GROUP_ID, ...doc.data() }));
+            await Promise.all(remoteStudents.map(student => putToDB('students', student)));
+            allStudents = remoteStudents;
+            renderStudentsList(document.getElementById('studentsListDisplay'), allStudents);
+        }
     } catch (error) {
-        console.error('Error loading students:', error);
-        allStudents = []; // Clear students on error
+        console.error('Error fetching students:', error);
     }
 }
 
@@ -532,18 +841,21 @@ function renderStudentsList(containerElement, students) {
     const parentLabel = translations[currentLang].parentLabel;
     const notAvailable = translations[currentLang].notAvailable;
     const deleteBtnText = translations[currentLang].deleteButton;
-
     students.forEach(student => {
         const studentElement = document.createElement('div');
         studentElement.className = 'record-item';
         studentElement.innerHTML = `
-            <div>
-                <p class="font-semibold text-grey-800">${student.name}</p>
-                <p class="text-sm text-grey-600">${parentLabel} ${student.parentPhoneNumber || notAvailable}</p>
+            <div class="flex items-center">
+                <button class="show-qr-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold p-2 rounded-md mx-2">ID</button>
+                <div>
+                    <p class="font-semibold text-grey-800">${student.name}</p>
+                    <p class="text-sm text-grey-600">${parentLabel} ${student.parentPhoneNumber || notAvailable}</p>
+                </div>
             </div>
             <button class="delete-student-btn bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-student-id="${student.id}" data-student-name="${student.name}">${deleteBtnText}</button>
         `;
         containerElement.appendChild(studentElement);
+        studentElement.querySelector('.show-qr-btn').addEventListener('click', () => showStudentQRCode(student));
         studentElement.querySelector('.delete-student-btn').addEventListener('click', function() {
             const confirmMsg = `${translations[currentLang].deleteConfirmation} ${this.dataset.studentName}?`;
             if (confirm(confirmMsg)) {
@@ -564,309 +876,401 @@ function handleStudentSearch(event) {
 }
 
 async function addNewStudent() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const studentName = document.getElementById('newStudentName').value.trim();
-    const parentPhoneNumber = document.getElementById('newParentPhoneNumber').value.trim();
-
-    if (studentName && parentPhoneNumber) {
-        try {
-            await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`).add({
-                name: studentName,
-                parentPhoneNumber: parentPhoneNumber
-            });
-            showMessageBox('studentAddedSuccess');
-            document.getElementById('newStudentName').value = '';
-            document.getElementById('newParentPhoneNumber').value = '';
-            await fetchStudents(); // Re-fetch and re-render all lists
-            renderAttendanceInputs();
-            renderGradesInputs();
-
-        } catch (error) {
-            console.error('Error adding student:', error);
-            showMessageBox('studentAddedError');
+    try {
+        if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
+        const studentName = document.getElementById('newStudentName').value.trim();
+        const parentPhoneNumber = document.getElementById('newParentPhoneNumber').value.trim();
+        if (!studentName || !parentPhoneNumber) {
+             showMessageBox('studentAndParentMissing');
+             return;
         }
-    } else {
-        showMessageBox('studentAndParentMissing');
+        const newStudentId = generateUniqueId();
+        const newStudentData = {
+            id: newStudentId,
+            groupId: SELECTED_GROUP_ID,
+            name: studentName,
+            parentPhoneNumber: parentPhoneNumber
+        };
+        await putToDB('students', newStudentData);
+        showMessageBox('studentAddedSuccess');
+        document.getElementById('newStudentName').value = '';
+        document.getElementById('newParentPhoneNumber').value = '';
+        await fetchStudents(); 
+        renderAttendanceInputs();
+        renderGradesInputs();
+        await addToSyncQueue({
+            type: 'add',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`,
+            id: newStudentId,
+            data: { name: studentName, parentPhoneNumber: parentPhoneNumber }
+        });
+        processSyncQueue();
+    } catch (error) {
+        console.error("Error adding student:", error);
+        showMessageBox('studentAddedError');
     }
 }
 
 async function deleteStudent(studentId) {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID || !studentId) return;
     try {
-        await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`).doc(studentId).delete();
+        if (!TEACHER_ID || !SELECTED_GROUP_ID || !studentId) return;
+        await deleteFromDB('students', studentId);
         showMessageBox('studentDeletedSuccess');
-        await fetchStudents(); // Re-fetch and re-render all lists
+        await fetchStudents();
         renderAttendanceInputs();
         renderGradesInputs();
+        if (!studentId.startsWith('offline_')) {
+            await addToSyncQueue({
+                type: 'delete',
+                path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students/${studentId}`
+            });
+            processSyncQueue();
+        }
     } catch (error) {
-        console.error('Error deleting student:', error);
+        console.error("Error deleting student:", error);
         showMessageBox('studentDeletedError');
     }
 }
 
-// --- 4. Attendance Management ---
 async function renderAttendanceInputs() {
-    const attendanceDate = document.getElementById('attendanceDateInput').value;
-    const container = document.getElementById('attendanceStudentsContainer');
-    container.innerHTML = ''; 
-
-    if (!attendanceDate) {
-        container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noDateSelected}</p>`;
-        return;
-    }
-    // التأكد من أن allStudents ليست فارغة
-    if (!allStudents || allStudents.length === 0) {
-        container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noStudentsAvailable}</p>`;
-        return;
-    }
-
-    let existingAttendance = {};
     try {
-        const doc = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/dailyAttendance`).doc(attendanceDate).get();
-        if (doc.exists && doc.data().records) {
-            doc.data().records.forEach(record => {
+        const attendanceDate = document.getElementById('attendanceDateInput').value;
+        const container = document.getElementById('attendanceStudentsContainer');
+        container.innerHTML = ''; 
+        if (!attendanceDate) {
+            container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noDateSelected}</p>`;
+            return;
+        }
+        if (!allStudents || allStudents.length === 0) {
+            container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noStudentsAvailable}</p>`;
+            return;
+        }
+        const attendanceId = `${SELECTED_GROUP_ID}_${attendanceDate}`;
+        const doc = await getFromDB('attendance', attendanceId);
+        let existingAttendance = {};
+        if (doc && doc.records) {
+            doc.records.forEach(record => {
                 existingAttendance[record.studentId] = record.status;
             });
         }
+        const absent = translations[currentLang].absent;
+        const present = translations[currentLang].present;
+        const late = translations[currentLang].late;
+        allStudents.forEach(student => {
+            const row = document.createElement('div');
+            row.className = 'student-row';
+            row.innerHTML = `
+                <span class="student-name">${student.name}</span>
+                <select class="attendance-status-select" data-student-id="${student.id}">
+                    <option value="absent">${absent}</option>
+                    <option value="present">${present}</option>
+                    <option value="late">${late}</option>
+                </select>
+            `;
+            container.appendChild(row);
+            const select = row.querySelector('.attendance-status-select');
+            select.value = existingAttendance[student.id] || 'absent';
+        });
     } catch (error) {
-        console.error('Error fetching existing attendance:', error);
+        console.error("Error rendering attendance:", error);
     }
-
-    const absent = translations[currentLang].absent;
-    const present = translations[currentLang].present;
-    const late = translations[currentLang].late;
-
-    allStudents.forEach(student => {
-        const row = document.createElement('div');
-        row.className = 'student-row';
-        row.innerHTML = `
-            <span class="student-name">${student.name}</span>
-            <select class="attendance-status-select" data-student-id="${student.id}">
-                <option value="absent">${absent}</option>
-                <option value="present">${present}</option>
-                <option value="late">${late}</option>
-            </select>
-        `;
-        container.appendChild(row);
-        const select = row.querySelector('.attendance-status-select');
-        select.value = existingAttendance[student.id] || 'absent';
-    });
 }
 
 async function saveDailyAttendance() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const attendanceDate = document.getElementById('attendanceDateInput').value;
-    if (!attendanceDate) {
-        showMessageBox('attendanceDateMissing');
-        return;
-    }
-    const records = [];
-    document.querySelectorAll('#attendanceStudentsContainer .attendance-status-select').forEach(select => {
-        records.push({ studentId: select.dataset.studentId, status: select.value });
-    });
-
     try {
-        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/dailyAttendance`).doc(attendanceDate);
-        await docRef.set({ date: attendanceDate, records: records }, { merge: true });
+        if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
+        const attendanceDate = document.getElementById('attendanceDateInput').value;
+        if (!attendanceDate) {
+            showMessageBox('attendanceDateMissing');
+            return;
+        }
+        const records = [];
+        document.querySelectorAll('#attendanceStudentsContainer .attendance-status-select').forEach(select => {
+            records.push({ studentId: select.dataset.studentId, status: select.value });
+        });
+        const attendanceId = `${SELECTED_GROUP_ID}_${attendanceDate}`;
+        const attendanceData = {
+            id: attendanceId,
+            date: attendanceDate,
+            records: records
+        };
+        await putToDB('attendance', attendanceData);
         showMessageBox('attendanceSavedSuccess');
+        await addToSyncQueue({
+            type: 'set',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/dailyAttendance/${attendanceDate}`,
+            data: { date: attendanceDate, records: records }
+        });
+        processSyncQueue();
     } catch (error) {
-        console.error('Error saving attendance:', error);
+        console.error("Error saving attendance:", error);
         showMessageBox('attendanceSavedError');
     }
 }
 
-// --- 5. Grades Management ---
 async function fetchAssignments() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
     try {
-        const snapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).get();
-        const select = document.getElementById('assignmentSelect');
-        const currentAssignment = select.value;
-        select.innerHTML = `<option value="">${translations[currentLang].selectAssignmentOption}</option>`;
-        snapshot.docs.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.innerText = `${doc.data().name} (${doc.data().date})`;
-            select.appendChild(option);
-        });
-        if(currentAssignment) {
-           select.value = currentAssignment;
+        if (!SELECTED_GROUP_ID) return;
+        const localAssignments = await getAllFromDB('assignments', 'groupId', SELECTED_GROUP_ID);
+        renderAssignmentSelect(localAssignments);
+        if (navigator.onLine) {
+            const snapshot = await firestoreDB.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).get();
+            const remoteAssignments = snapshot.docs.map(doc => ({ id: doc.id, groupId: SELECTED_GROUP_ID, ...doc.data() }));
+            await Promise.all(remoteAssignments.map(asm => putToDB('assignments', asm)));
+            renderAssignmentSelect(remoteAssignments);
         }
-
     } catch (error) {
-        console.error('Error loading assignments:', error);
+        console.error('Error fetching assignments:', error);
+    }
+}
+
+function renderAssignmentSelect(assignments) {
+    const select = document.getElementById('assignmentSelect');
+    const currentAssignment = select.value;
+    select.innerHTML = `<option value="">${translations[currentLang].selectAssignmentOption}</option>`;
+    assignments.sort((a, b) => b.date.localeCompare(a.date));
+    assignments.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.innerText = `${doc.name} (${doc.date})`;
+        select.appendChild(option);
+    });
+    if (currentAssignment && assignments.some(a => a.id === currentAssignment)) {
+       select.value = currentAssignment;
     }
 }
 
 async function renderGradesInputs() {
-    const assignmentId = document.getElementById('assignmentSelect').value;
-    const container = document.getElementById('gradesStudentsContainer');
-    container.innerHTML = '';
-
-    if (!assignmentId) {
-        container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noAssignmentSelected}</p>`;
-        return;
-    }
-    if (!allStudents || allStudents.length === 0) {
-        container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noStudentsAvailable}</p>`;
-        return;
-    }
-    
-    let existingGrades = {};
-     try {
-        const doc = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).doc(assignmentId).get();
-        if (doc.exists && doc.data().scores) {
-            doc.data().scores.forEach(score => {
-                existingGrades[score.studentId] = score.score;
-            });
+    try {
+        const assignmentId = document.getElementById('assignmentSelect').value;
+        const container = document.getElementById('gradesStudentsContainer');
+        container.innerHTML = '';
+        if (!assignmentId) {
+            container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noAssignmentSelected}</p>`;
+            return;
         }
+        if (!allStudents || allStudents.length === 0) {
+            container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noStudentsAvailable}</p>`;
+            return;
+        }
+        let existingScores = {};
+        const assignmentDoc = await getFromDB('assignments', assignmentId);
+        if (assignmentDoc && assignmentDoc.scores) {
+            existingScores = assignmentDoc.scores;
+        }
+        allStudents.forEach(student => {
+            const studentData = existingScores[student.id] || { score: '', submitted: false };
+            const row = document.createElement('div');
+            row.className = 'student-row';
+            row.innerHTML = `
+                <span class="student-name">${student.name}</span>
+                <div class="flex items-center">
+                    <label class="homework-checkbox-container">
+                        <input type="checkbox" class="homework-checkbox" data-student-id="${student.id}" ${studentData.submitted ? 'checked' : ''}>
+                        <span>سلّم الواجب</span>
+                    </label>
+                    <input type="number" class="grade-input" data-student-id="${student.id}" min="0" max="100" placeholder="${translations[currentLang].scorePlaceholder}" value="${studentData.score || ''}">
+                </div>
+            `;
+            container.appendChild(row);
+        });
     } catch (error) {
-        console.error('Error fetching existing grades:', error);
+        console.error("Error rendering grades inputs:", error);
     }
-
-    allStudents.forEach(student => {
-        const row = document.createElement('div');
-        row.className = 'student-row';
-        row.innerHTML = `
-            <span class="student-name">${student.name}</span>
-            <input type="number" class="grade-input" data-student-id="${student.id}" min="0" max="100" placeholder="${translations[currentLang].scorePlaceholder}">
-        `;
-        container.appendChild(row);
-        
-        const input = row.querySelector('.grade-input');
-        if (existingGrades[student.id] !== undefined) {
-            input.value = existingGrades[student.id];
-        }
-    });
 }
 
 async function addNewAssignment() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const name = document.getElementById('newAssignmentName').value.trim();
-    const date = document.getElementById('newAssignmentDate').value;
-    if (name && date) {
-        try {
-            const newDoc = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).add({
-                name: name,
-                date: date,
-                scores: []
-            });
-            showMessageBox('assignmentAddedSuccess');
-            await fetchAssignments();
-            document.getElementById('assignmentSelect').value = newDoc.id;
-            renderGradesInputs();
-            document.getElementById('newAssignmentName').value = '';
-            document.getElementById('newAssignmentDate').value = '';
-        } catch (error) {
-            console.error('Error adding assignment:', error);
-            showMessageBox('assignmentAddedError');
+    try {
+        if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
+        const name = document.getElementById('newAssignmentName').value.trim();
+        const date = document.getElementById('newAssignmentDate').value;
+        if (!name || !date) {
+            showMessageBox('assignmentNameDateMissing');
+            return;
         }
-    } else {
-        showMessageBox('assignmentNameDateMissing');
+        const newAssignmentId = generateUniqueId();
+        const newAssignmentData = {
+            id: newAssignmentId,
+            groupId: SELECTED_GROUP_ID,
+            name: name,
+            date: date,
+            scores: {}
+        };
+        await putToDB('assignments', newAssignmentData);
+        showMessageBox('assignmentAddedSuccess');
+        await fetchAssignments();
+        document.getElementById('assignmentSelect').value = newAssignmentId;
+        renderGradesInputs();
+        document.getElementById('newAssignmentName').value = '';
+        document.getElementById('newAssignmentDate').value = '';
+        await addToSyncQueue({
+            type: 'add',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`,
+            id: newAssignmentId,
+            data: { name, date, scores: {} }
+        });
+        processSyncQueue();
+    } catch (error) {
+        console.error("Error adding assignment:", error);
+        showMessageBox("assignmentAddedError");
     }
 }
 
 async function saveAssignmentGrades() {
-    const assignmentId = document.getElementById('assignmentSelect').value;
-    if (!TEACHER_ID || !SELECTED_GROUP_ID || !assignmentId) {
-        showMessageBox('selectAssignmentFirst');
-        return;
-    }
-
-    const scores = [];
-    document.querySelectorAll('#gradesStudentsContainer .grade-input').forEach(input => {
-        if (input.value !== '') {
-            scores.push({ studentId: input.dataset.studentId, score: parseInt(input.value, 10) });
-        }
-    });
-    
     try {
-        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments`).doc(assignmentId);
-        await docRef.update({ scores: scores });
-        showMessageBox('gradesSavedSuccess');
-    } catch(error) {
-        console.error('Error saving grades:', error);
-        showMessageBox('gradesSavedError');
+        const assignmentId = document.getElementById('assignmentSelect').value;
+        if (!TEACHER_ID || !SELECTED_GROUP_ID || !assignmentId) {
+            showMessageBox('selectAssignmentFirst');
+            return;
+        }
+        const scores = {};
+        document.querySelectorAll('#gradesStudentsContainer .student-row').forEach(row => {
+            const gradeInput = row.querySelector('.grade-input');
+            const checkbox = row.querySelector('.homework-checkbox');
+            if (gradeInput && checkbox) {
+                const studentId = gradeInput.dataset.studentId;
+                scores[studentId] = {
+                    score: gradeInput.value !== '' ? parseInt(gradeInput.value, 10) : '',
+                    submitted: checkbox.checked
+                };
+            }
+        });
+        const assignment = await getFromDB('assignments', assignmentId);
+        if (assignment) {
+            assignment.scores = scores;
+            await putToDB('assignments', assignment);
+            showMessageBox('gradesSavedSuccess');
+        }
+        if (!assignmentId.startsWith('offline_')) {
+            await addToSyncQueue({
+                type: 'set',
+                path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments/${assignmentId}`,
+                data: { scores: scores }
+            });
+            processSyncQueue();
+        }
+    } catch (error) {
+        console.error("Error saving grades:", error);
+        showMessageBox("gradesSavedError");
     }
 }
 
-// --- 6. Class Schedule Management ---
 async function saveRecurringSchedule() {
     if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
     const subject = document.getElementById('recurringSubject').value.trim();
     const time = document.getElementById('recurringTime').value;
-    const selectedDays = [];
-    document.querySelectorAll('#daysOfWeekContainer .day-checkbox:checked').forEach(checkbox => {
-        selectedDays.push(checkbox.value);
-    });
+    const location = document.getElementById('recurringLocation').value.trim();
+    const selectedDays = Array.from(document.querySelectorAll('#daysOfWeekContainer input:checked')).map(cb => parseInt(cb.value));
 
-    if (subject && time && selectedDays.length > 0) {
-        try {
-            await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules`).add({
-                subject: subject,
-                time: time,
-                days: selectedDays
-            });
-            showMessageBox('scheduleSavedSuccess');
-            fetchRecurringSchedules();
-            document.getElementById('recurringSubject').value = '';
-            document.getElementById('recurringTime').value = '';
-            document.querySelectorAll('#daysOfWeekContainer .day-checkbox').forEach(cb => cb.checked = false);
-
-        } catch (error) {
-            console.error('Error saving recurring schedule:', error);
-            showMessageBox('scheduleSavedError');
-        }
-    } else {
+    if (!subject || !time || selectedDays.length === 0) {
         showMessageBox('fillScheduleForm');
+        return;
+    }
+
+    const newScheduleId = generateUniqueId();
+    const scheduleData = {
+        id: newScheduleId,
+        groupId: SELECTED_GROUP_ID,
+        subject,
+        time,
+        location,
+        days: selectedDays
+    };
+
+    try {
+        await putToDB('schedules', scheduleData);
+        await addToSyncQueue({
+            type: 'add',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules`,
+            id: newScheduleId,
+            data: { subject, time, location, days: selectedDays }
+        });
+        processSyncQueue();
+        showMessageBox('scheduleSavedSuccess');
+        document.getElementById('recurringSubject').value = '';
+        document.getElementById('recurringTime').value = '';
+        document.getElementById('recurringLocation').value = '';
+        document.querySelectorAll('#daysOfWeekContainer input:checked').forEach(cb => cb.checked = false);
+        
+        console.log("1. Save successful. Now fetching to refresh UI...");
+        fetchRecurringSchedules();
+
+    } catch (error) {
+        console.error('Error saving recurring schedule:', error);
+        showMessageBox('scheduleSavedError');
     }
 }
 
 async function fetchRecurringSchedules() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
+    if (!SELECTED_GROUP_ID) return;
+    console.log("2. fetchRecurringSchedules started.");
     const container = document.getElementById('recurringSchedulesDisplay');
     container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].loadingSchedules}</p>`;
     
     try {
-        const snapshot = await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules`).get();
-        container.innerHTML = '';
+        let schedules = await getAllFromDB('schedules', 'groupId', SELECTED_GROUP_ID);
+        console.log("3. Schedules fetched from local DB:", schedules);
+        renderSchedules(schedules);
 
-        if (snapshot.empty) {
-            container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noSchedulesYet}</p>`;
-            return;
+        if (navigator.onLine) {
+            const snapshot = await firestoreDB.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules`).get();
+            const remoteSchedules = snapshot.docs.map(doc => ({ id: doc.id, groupId: SELECTED_GROUP_ID, ...doc.data() }));
+            
+            await Promise.all(remoteSchedules.map(schedule => putToDB('schedules', schedule)));
+            
+            console.log("3. (Online) Schedules fetched from Firestore:", remoteSchedules);
+            renderSchedules(remoteSchedules);
         }
-
-        snapshot.docs.forEach(doc => {
-            const schedule = doc.data();
-            const scheduleId = doc.id;
-            const element = document.createElement('div');
-            element.className = 'record-item';
-            element.innerHTML = `
-                <div>
-                    <p class="font-semibold text-grey-800">${schedule.subject} at ${schedule.time}</p>
-                    <p class="text-sm text-grey-600">${translations[currentLang].repeatsOn} ${schedule.days.join(', ')}</p>
-                </div>
-                <button class="delete-schedule-btn bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-schedule-id="${scheduleId}">${translations[currentLang].deleteButton}</button>
-            `;
-            container.appendChild(element);
-
-            element.querySelector('.delete-schedule-btn').addEventListener('click', function() {
-                if (confirm(translations[currentLang].confirmScheduleDelete)) {
-                    deleteRecurringSchedule(this.dataset.scheduleId);
-                }
-            });
-        });
-
     } catch (error) {
         console.error('Error fetching recurring schedules:', error);
         container.innerHTML = '<p class="text-primary-red text-center">Failed to load schedules.</p>';
     }
 }
 
+function renderSchedules(schedules) {
+    console.log("4. renderSchedules started with schedules:", schedules);
+    const container = document.getElementById('recurringSchedulesDisplay');
+    container.innerHTML = '';
+
+    if (!schedules || schedules.length === 0) {
+        container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].noSchedulesYet}</p>`;
+        return;
+    }
+
+    schedules.forEach(schedule => {
+        console.log("5. Rendering schedule item:", schedule);
+        const dayNames = schedule.days.map(dayIndex => translations[currentLang].days[dayIndex] || '').join(', ');
+        const locationText = schedule.location ? ` - ${schedule.location}` : '';
+
+        const element = document.createElement('div');
+        element.className = 'record-item';
+        element.innerHTML = `
+            <div>
+                <p class="font-semibold text-grey-800">${schedule.subject} at ${schedule.time}${locationText}</p>
+                <p class="text-sm text-grey-600">${translations[currentLang].repeatsOn} ${dayNames}</p>
+            </div>
+            <button class="delete-schedule-btn bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-schedule-id="${schedule.id}">${translations[currentLang].deleteButton}</button>
+        `;
+        container.appendChild(element);
+
+        element.querySelector('.delete-schedule-btn').addEventListener('click', function() {
+            if (confirm(translations[currentLang].confirmScheduleDelete)) {
+                deleteRecurringSchedule(this.dataset.scheduleId);
+            }
+        });
+    });
+}
 async function deleteRecurringSchedule(scheduleId) {
     if (!TEACHER_ID || !SELECTED_GROUP_ID || !scheduleId) return;
     try {
-        await db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules`).doc(scheduleId).delete();
+        await deleteFromDB('schedules', scheduleId);
+        if (!scheduleId.startsWith('offline_')) {
+            await addToSyncQueue({
+                type: 'delete',
+                path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules/${scheduleId}`
+            });
+            processSyncQueue();
+        }
         showMessageBox('scheduleDeletedSuccess');
         fetchRecurringSchedules();
     } catch (error) {
@@ -875,59 +1279,145 @@ async function deleteRecurringSchedule(scheduleId) {
     }
 }
 
-async function updateSingleClass() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const date = document.getElementById('exceptionDate').value;
-    const newTime = document.getElementById('exceptionNewTime').value;
+async function updateSingleClass() { }
+async function cancelSingleClass() { }
 
-    if (!date || !newTime) {
-        showMessageBox('classDateAndTimeMissing');
-        return;
-    }
+function playBeepSound() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioContext) return;
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.15);
+}
 
+function playErrorSound() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioContext) return;
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.2);
+}
+
+function showStudentQRCode(student) {
+    const data = { teacherId: TEACHER_ID, groupId: SELECTED_GROUP_ID, studentId: student.id };
+    document.getElementById('idQrcode').innerHTML = '';
+    new QRCode(document.getElementById('idQrcode'), {
+        text: JSON.stringify(data),
+        width: 180,
+        height: 180,
+        correctLevel : QRCode.CorrectLevel.H
+    });
+    const teacherName = document.getElementById('teacherNameInput').value || 'Teacher';
+    document.getElementById('idTeacherName').innerText = `Teacher: ${teacherName}`;
+    document.getElementById('idStudentName').innerText = student.name;
+    qrCodeModal.classList.remove('hidden');
+}
+
+async function startScanner(mode) {
+    isScannerPaused = false;
+    currentScannerMode = mode;
+    scannerModal.classList.remove('hidden');
     try {
-        const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/scheduleExceptions`).doc(date);
-        await docRef.set({
-            date: date,
-            newTime: newTime,
-            status: 'rescheduled'
-        }, { merge: true });
-
-        const successMsg = translations[currentLang].classUpdatedSuccess.replace('{date}', date).replace('{time}', newTime);
-        showMessageBox(successMsg);
-        document.getElementById('exceptionDate').value = '';
-        document.getElementById('exceptionNewTime').value = '';
-    } catch (error) {
-        console.error('Error updating class:', error);
-        showMessageBox('classUpdatedError');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        videoElement.srcObject = stream;
+        await videoElement.play();
+        animationFrameId = requestAnimationFrame(tick);
+    } catch (err) {
+        console.error("Camera Error:", err);
+        showMessageBox("لا يمكن الوصول للكاميرا. الرجاء التأكد من السماح للمتصفح باستخدامها.");
+        stopScanner();
     }
 }
 
-async function cancelSingleClass() {
-    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
-    const date = document.getElementById('exceptionDate').value;
+function stopScanner() {
+    isScannerPaused = false;
+    if (videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
+    }
+    scannerModal.classList.add('hidden');
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+}
 
-    if (!date) {
-        showMessageBox('classDateMissing');
+function tick() {
+    if (isScannerPaused) {
+        animationFrameId = requestAnimationFrame(tick);
         return;
     }
-    
-    const confirmMsg = translations[currentLang].confirmCancelClass.replace('{date}', date);
-    if (confirm(confirmMsg)) {
-        try {
-            const docRef = db.collection(`teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/scheduleExceptions`).doc(date);
-            await docRef.set({
-                date: date,
-                status: 'cancelled'
-            }, { merge: true });
-
-            const successMsg = translations[currentLang].classCancelledSuccess.replace('{date}', date);
-            showMessageBox(successMsg);
-            document.getElementById('exceptionDate').value = '';
-            document.getElementById('exceptionNewTime').value = '';
-        } catch (error) {
-            console.error('Error cancelling class:', error);
-            showMessageBox('classCancelledError');
+    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+        const canvasElement = document.createElement('canvas');
+        const canvas = canvasElement.getContext('2d');
+        canvasElement.height = videoElement.videoHeight;
+        canvasElement.width = videoElement.videoWidth;
+        canvas.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+        const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+        if (code) {
+            isScannerPaused = true;
+            processScannedData(code.data);
+            setTimeout(() => {
+                isScannerPaused = false;
+            }, 2000);
         }
+    }
+    animationFrameId = requestAnimationFrame(tick);
+}
+
+function processScannedData(dataString) {
+    const overlay = document.getElementById('scannerOverlay');
+    try {
+        const data = JSON.parse(dataString);
+        if (data.teacherId === TEACHER_ID && data.groupId === SELECTED_GROUP_ID && data.studentId) {
+            const student = allStudents.find(s => s.id === data.studentId);
+            if (student) {
+                playBeepSound();
+                const nameDisplay = document.getElementById('scannedStudentName');
+                nameDisplay.innerText = student.name;
+                nameDisplay.style.opacity = '1';
+                overlay.classList.add('success');
+                setTimeout(() => {
+                    overlay.classList.remove('success');
+                    nameDisplay.style.opacity = '0';
+                }, 1500);
+                if (currentScannerMode === 'attendance') {
+                    const selectElement = document.querySelector(`#attendanceStudentsContainer .attendance-status-select[data-student-id="${data.studentId}"]`);
+                    if (selectElement) {
+                        selectElement.value = 'present';
+                        selectElement.closest('.student-row').style.backgroundColor = '#d1fecb';
+                    }
+                } else if (currentScannerMode === 'homework') {
+                    const checkboxElement = document.querySelector(`#gradesStudentsContainer .homework-checkbox[data-student-id="${data.studentId}"]`);
+                    if (checkboxElement) {
+                        checkboxElement.checked = true;
+                        checkboxElement.closest('.student-row').style.backgroundColor = '#d1fecb';
+                    }
+                }
+            } else {
+                throw new Error("Student not found in this group.");
+            }
+        } else {
+            throw new Error("Invalid QR Code for this group/teacher.");
+        }
+    } catch (error) {
+        console.error("QR Scan Error:", error.message);
+        playErrorSound();
+        overlay.classList.add('error');
+        setTimeout(() => {
+            overlay.classList.remove('error');
+        }, 1500);
     }
 }

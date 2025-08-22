@@ -3,12 +3,12 @@
 /* Base styles and font */
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f8f8f8; /* Light grey background matching Flutter app */
-    color: #212121; /* Dark text for readability */
-    opacity: 0; /* Initial state for fade-in animation */
+    background-color: #f8f8f8;
+    color: #212121;
+    opacity: 0;
     animation: fadeIn 0.8s ease-out forwards;
-    line-height: 1.4; /* Reduced line-height for compactness */
-    transition: background-color 0.3s, color 0.3s; /* Transition for dark mode */
+    line-height: 1.4;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 /* Keyframe animation for page load */
@@ -39,7 +39,6 @@ body {
 /* Adjust margin based on text direction */
 html[dir="ltr"] .header-logo { margin-right: 10px; }
 html[dir="rtl"] .header-logo { margin-left: 10px; }
-
 html[dir="ltr"] #teacherDashboardTitle { margin-right: 1rem; }
 html[dir="rtl"] #teacherDashboardTitle { margin-left: 1rem; }
 
@@ -103,7 +102,7 @@ html[dir="rtl"] #teacherDashboardTitle { margin-left: 1rem; }
 .text-grey-600 { color: #616161; }
 .text-grey-800 { color: #374151; }
 
-/* Record item styles (EXTREMELY COMPACT) */
+/* Record item styles */
 .record-item {
     background-color: #f9fafb;
     border-radius: 8px;
@@ -142,10 +141,11 @@ html[dir="rtl"] #teacherDashboardTitle { margin-left: 1rem; }
     transition: opacity 0.4s ease-in-out;
 }
 
-/* Student rows in attendance/grades (EXTREMELY COMPACT) */
+/* Student rows in attendance/grades */
 .student-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 0.25rem 0.5rem;
     border-bottom: 1px solid #eee;
     transition: background-color 0.3s, border-color 0.3s;
@@ -170,17 +170,10 @@ html[dir="rtl"] #teacherDashboardTitle { margin-left: 1rem; }
     font-size: 0.9rem;
     transition: all 0.2s ease-in-out;
 }
-
 html[dir="ltr"] .student-row .attendance-status-select,
-html[dir="ltr"] .student-row .grade-input {
-    margin-left: 0.5rem;
-}
+html[dir="ltr"] .student-row .grade-input { margin-left: 0.5rem; }
 html[dir="rtl"] .student-row .attendance-status-select,
-html[dir="rtl"] .student-row .grade-input {
-    margin-right: 0.5rem;
-}
-
-
+html[dir="rtl"] .student-row .grade-input { margin-right: 0.5rem; }
 .student-row .attendance-status-select:focus,
 .student-row .grade-input:focus {
     border-color: rgb(242, 206, 90);
@@ -188,6 +181,7 @@ html[dir="rtl"] .student-row .grade-input {
 }
 .student-row .grade-input {
     text-align: center;
+    width: 80px;
 }
 
 /* Day checkboxes */
@@ -215,52 +209,41 @@ html[dir="rtl"] .day-checkbox-container input { margin-left: 0.75rem; }
 
 
 /* --- DARK MODE STYLES --- */
-
 body.dark-mode {
     background-color: #121212;
     color: #e0e0e0;
 }
-
 .dark-mode .app-bar,
 .dark-mode .card-container {
     background-color: #1e1e1e;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     border: 1px solid #333;
 }
-
 .dark-mode h1, .dark-mode h2, .dark-mode h3, .dark-mode h4,
 .dark-mode .text-gray-900, .dark-mode .text-gray-800,
 .dark-mode label {
-    color: #f5f5f5 !important; /* Tailwind override */
+    color: #f5f5f5 !important;
 }
-
-.dark-mode .text-grey-600 {
-    color: #9e9e9e;
-}
-
+.dark-mode .text-grey-600 { color: #9e9e9e; }
 .dark-mode .input-field {
     background-color: #2c2c2c;
     color: #f5f5f5;
     border: 1px solid #444;
 }
-
 .dark-mode .input-field:focus {
     background-color: #1e1e1e;
     border-color: rgb(242, 206, 90);
     box-shadow: 0 0 0 3px rgba(242, 206, 90, 0.3);
 }
-
 .dark-mode .btn-primary-custom {
     background-color: rgb(242, 206, 90);
     color: #121212;
     box-shadow: 0 4px 8px rgba(242, 206, 90, 0.2);
 }
-
 .dark-mode .btn-primary-custom:hover {
     background-color: rgb(255, 220, 120);
     box-shadow: 0 6px 12px rgba(242, 206, 90, 0.3);
 }
-
 .dark-mode .record-item,
 .dark-mode .record-item:nth-child(even) {
     background-color: #2a2a2a;
@@ -270,9 +253,8 @@ body.dark-mode {
     background-color: #383838;
     border-color: #555;
 }
-
 .dark-mode .student-row {
-    background-color: #2a2a2a; /* Ensure row background is dark */
+    background-color: #2a2a2a;
     border-bottom-color: #333;
 }
 .dark-mode .student-row .attendance-status-select,
@@ -282,32 +264,100 @@ body.dark-mode {
     color: #f5f5f5;
     border-color: #444;
 }
-
 .dark-mode #darkModeToggleButton svg,
 .dark-mode #languageToggleButton {
     color: #f5f5f5;
     stroke: #f5f5f5;
 }
-
-
-/* =================================================================== */
-/* ===         الحل الأقوى لضمان اللون الأبيض لأسماء الطلاب         === */
-/* =================================================================== */
-/*
-  هذه القاعدة تستهدف أسماء الطلاب في كل الأقسام الثلاثة:
-  1. قائمة الطلاب الرئيسية (داخل .record-item)
-  2. قائمة الحضور والدرجات (داخل .student-row)
-*/
-.dark-mode .record-item p:first-child {
-    color: #ffffff !important; /* فرض اللون الأبيض النقي للوضوح */
-    font-weight: 600 !important;
-}
-
-/* قاعدة أكثر تحديدًا وقوة لقائمتي الحضور والدرجات 
-*/
+.dark-mode .record-item p:first-child,
 .dark-mode #attendanceStudentsContainer .student-row .student-name,
 .dark-mode #gradesStudentsContainer .student-row .student-name {
-    color: #ffffff !important; /* فرض اللون الأبيض النقي للوضوح */
+    color: #ffffff !important;
     font-weight: 600 !important;
 }
-/* =================================================================== */
+
+/* --- QR Code Scanner Modal Styles --- */
+#scannerModal video { transform: scaleX(-1); }
+#closeScannerModal { line-height: 1; }
+
+/* --- Homework Checkbox Styles --- */
+.homework-checkbox-container { display: flex; align-items: center; cursor: pointer; font-size: 0.85rem; color: #616161; }
+html[dir="ltr"] .homework-checkbox-container { margin-right: 1rem; }
+html[dir="rtl"] .homework-checkbox-container { margin-left: 1rem; }
+.homework-checkbox-container input { width: 0.9rem; height: 0.9rem; accent-color: rgb(76, 175, 80); }
+html[dir="ltr"] .homework-checkbox-container input { margin-right: 0.4rem; }
+html[dir="rtl"] .homework-checkbox-container input { margin-left: 0.4rem; }
+.dark-mode .homework-checkbox-container { color: #bdbdbd; }
+
+/* --- Scanner Visual Feedback Styles --- */
+#scannerOverlay.success { border-color: rgb(76, 175, 80); }
+
+/* --- Print Styles for the ID Card --- */
+@media print {
+    body * { visibility: hidden; }
+    #printableIdCard, #printableIdCard * { visibility: visible; }
+    #printableIdCard { position: absolute; left: 0; top: 0; width: 100%; border: 2px solid #000 !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
+    #qrCodeModal > div > div:last-child { display: none; }
+}
+
+/* --- Status and Sync Indicators --- */
+#statusIndicator { transition: all 0.3s ease-in-out; padding: 0.2rem 0.6rem; border: 1px solid transparent; }
+#statusIndicator.online { color: #166534; background-color: #dcfce7; border-color: #4ade80; }
+#statusIndicator.offline { color: #52525b; background-color: #f4f4f5; border-color: #d4d4d8; }
+.dark-mode #statusIndicator.online { color: #bbf7d0; background-color: #14532d; border-color: #22c55e; }
+.dark-mode #statusIndicator.offline { color: #a1a1aa; background-color: #3f3f46; border-color: #52525b; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; transition: background-color 0.3s ease-in-out; }
+#statusIndicator.online .status-dot { background-color: #22c55e; }
+#statusIndicator.offline .status-dot { background-color: #a1a1aa; }
+#syncIndicator { font-weight: 500; }
+#syncIndicator .icon-spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* --- Tab Navigation Styles --- */
+.tabs-nav-container { display: flex; gap: 0.5rem; border-bottom: 2px solid #e5e7eb; padding-left: 0.5rem; padding-right: 0.5rem; }
+.dark-mode .tabs-nav-container { border-bottom-color: #374151; }
+.tab-button {
+    padding: 0.5rem 1rem;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    font-weight: 600;
+    color: #6b7280;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease-in-out;
+}
+.dark-mode .tab-button { color: #9ca3af; }
+.tab-button:hover { background-color: #f3f4f6; color: #111827; }
+.dark-mode .tab-button:hover { background-color: #374151; color: #f9fafb; }
+.tab-button.active { color: #111827; border-bottom-color: rgb(242, 206, 90); }
+.dark-mode .tab-button.active { color: #ffffff; }
+.tab-button:disabled { color: #d1d5db; cursor: not-allowed; }
+.dark-mode .tab-button:disabled { color: #4b5563; }
+
+/* Tab Content Animation */
+.tab-content { animation: tab-fade-in 0.5s ease; }
+@keyframes tab-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* --- Logout Button Dark Mode --- */
+.dark-mode #logoutButton {
+    color: #d1d5db; /* text-gray-300 */
+}
+.dark-mode #logoutButton:hover {
+    color: #ef4444; /* text-red-500 */
+    background-color: #374151; /* bg-gray-700 */
+}
+/* --- Fix ID Button Visibility in Dark Mode --- */
+.dark-mode .show-qr-btn {
+    background-color: #4b5563; /* A darker gray */
+    color: #e5e7eb;           /* A light gray for the text */
+    border: 1px solid #6b7280;
+}
+
+.dark-mode .show-qr-btn:hover {
+    background-color: #374151; /* A slightly different gray on hover */
+    border-color: #9ca3af;
+}
+
+/* --- Scanner Visual Feedback for Error --- */
+#scannerOverlay.error {
+    border-color: rgb(239, 68, 68); /* Tailwind's red-500 */
+}

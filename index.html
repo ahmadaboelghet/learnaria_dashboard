@@ -21,17 +21,23 @@
             <h1 class="text-2xl font-extrabold text-gray-900">Learnaria</h1>
         </div>
         <div class="flex items-center">
-            <h2 class="text-xl font-semibold text-gray-800" data-key="teacherDashboardTitle">لوحة تحكم المعلم</h2>
-            <button id="languageToggleButton" class="p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-gray-400 font-bold text-lg mx-2">
-                EN
-            </button>
+            <div class="flex items-center gap-4 mx-4">
+                <div id="statusIndicator" class="flex items-center gap-2 p-1 rounded-full text-sm">
+                    <div class="status-dot"></div>
+                    <span class="status-text"></span>
+                </div>
+                <div id="syncIndicator" class="flex items-center gap-2 text-sm"></div>
+            </div>
+            <button id="languageToggleButton" class="p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-gray-400 font-bold text-lg mx-2">EN</button>
             <button id="darkModeToggleButton" class="p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-gray-400">
-                <svg id="darkModeIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                <svg id="darkModeIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                <svg id="lightModeIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            </button>
+            <button id="logoutButton" class="hidden flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-red-500 p-2 rounded-lg transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                <svg id="lightModeIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <span data-key="logoutButton">تسجيل الخروج</span>
             </button>
         </div>
     </header>
@@ -49,150 +55,219 @@
         </section>
 
         <div id="mainContent" class="hidden">
-            <section class="card-container">
-                <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="myProfileTitle">ملفي الشخصي</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label for="teacherNameInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="myNameLabel">اسمي:</label>
-                        <input type="text" id="teacherNameInput" class="input-field" data-key-placeholder="fullNamePlaceholder">
-                    </div>
-                    <div>
-                        <label for="teacherSubjectInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="mySubjectLabel">المادة التي أدرسها:</label>
-                        <input type="text" id="teacherSubjectInput" class="input-field" data-key-placeholder="subjectPlaceholder">
-                    </div>
+            <div id="tabs-nav" class="tabs-nav-container mb-4">
+                <button class="tab-button active" data-tab="profile" data-key="tabProfile">الملف الشخصي</button>
+                <button class="tab-button" data-tab="students" data-key="tabStudents" disabled>الطلاب</button>
+                <button class="tab-button" data-tab="attendance" data-key="tabAttendance" disabled>الحضور</button>
+                <button class="tab-button" data-tab="grades" data-key="tabGrades" disabled>الدرجات</button>
+                <button class="tab-button" data-tab="schedule" data-key="tabSchedule" disabled>الجدول</button>
+            </div>
+
+            <div id="tabs-content">
+                <div id="tab-profile" class="tab-content">
+                    <section class="card-container">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="myProfileTitle">ملفي الشخصي</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="teacherNameInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="myNameLabel">اسمي:</label>
+                                <input type="text" id="teacherNameInput" class="input-field" data-key-placeholder="fullNamePlaceholder">
+                            </div>
+                            <div>
+                                <label for="teacherSubjectInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="mySubjectLabel">المادة التي أدرسها:</label>
+                                <input type="text" id="teacherSubjectInput" class="input-field" data-key-placeholder="subjectPlaceholder">
+                            </div>
+                        </div>
+                        <button id="saveProfileButton" class="btn-primary-custom" data-key="saveProfileButton">حفظ ملفي الشخصي</button>
+                    </section>
+                    <section class="card-container">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="manageGroupsTitle">2. إدارة المجموعات</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="newGroupName" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newGroupNameLabel">اسم المجموعة الجديدة:</label>
+                                <input type="text" id="newGroupName" class="input-field" data-key-placeholder="groupNamePlaceholder">
+                                <button id="addNewGroupButton" class="btn-primary-custom mt-2 w-full" data-key="addNewGroupButton">إضافة مجموعة جديدة</button>
+                            </div>
+                            <div>
+                                <label for="groupSelect" class="block text-sm font-semibold text-grey-800 mb-1" data-key="selectGroupLabel">اختر مجموعة لإدارتها:</label>
+                                <select id="groupSelect" class="input-field"></select>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-                <button id="saveProfileButton" class="btn-primary-custom" data-key="saveProfileButton">حفظ ملفي الشخصي</button>
-            </section>
 
-            <section class="card-container">
-                <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="manageGroupsTitle">2. إدارة المجموعات</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="newGroupName" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newGroupNameLabel">اسم المجموعة الجديدة:</label>
-                        <input type="text" id="newGroupName" class="input-field" data-key-placeholder="groupNamePlaceholder">
-                        <button id="addNewGroupButton" class="btn-primary-custom mt-2 w-full" data-key="addNewGroupButton">إضافة مجموعة جديدة</button>
-                    </div>
-                    <div>
-                        <label for="groupSelect" class="block text-sm font-semibold text-grey-800 mb-1" data-key="selectGroupLabel">اختر مجموعة لإدارتها:</label>
-                        <select id="groupSelect" class="input-field">
-                            </select>
-                    </div>
+                <div id="tab-students" class="tab-content hidden">
+                    <section class="card-container">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="manageStudentsTitle">إدارة الطلاب</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="newStudentName" class="block text-sm font-semibold text-grey-800 mb-1" data-key="studentNameLabel">اسم الطالب:</label>
+                                <input type="text" id="newStudentName" class="input-field" data-key-placeholder="newStudentPlaceholder">
+                            </div>
+                            <div>
+                                <label for="newParentPhoneNumber" class="block text-sm font-semibold text-grey-800 mb-1" data-key="parentPhoneLabel">رقم هاتف ولي الأمر:</label>
+                                <input type="text" id="newParentPhoneNumber" class="input-field" data-key-placeholder="parentPhonePlaceholder">
+                            </div>
+                        </div>
+                        <button id="addNewStudentButton" class="btn-primary-custom" data-key="addNewStudentButton">إضافة طالب جديد</button>
+                        <div class="mt-6">
+                            <label for="studentSearchInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="searchStudentLabel">البحث عن طالب:</label>
+                            <input type="search" id="studentSearchInput" class="input-field" data-key-placeholder="searchPlaceholder">
+                        </div>
+                        <h4 class="text-lg font-bold mt-4 mb-2 text-gray-800" data-key="allStudentsLabel">كل الطلاب في هذه المجموعة:</h4>
+                        <div id="studentsListDisplay" class="border rounded-lg overflow-hidden divide-y divide-gray-200"></div>
+                    </section>
                 </div>
-            </section>
 
-            <div id="groupContent" class="hidden">
-                <section class="card-container">
-                    <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="manageStudentsTitle">إدارة الطلاب</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="newStudentName" class="block text-sm font-semibold text-grey-800 mb-1" data-key="studentNameLabel">اسم الطالب:</label>
-                            <input type="text" id="newStudentName" class="input-field" data-key-placeholder="newStudentPlaceholder">
+                <div id="tab-attendance" class="tab-content hidden">
+                    <section class="card-container">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="attendanceTitle">الحضور اليومي</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="attendanceDateInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="selectDateLabel">اختر التاريخ:</label>
+                                <input type="date" id="attendanceDateInput" class="input-field">
+                            </div>
+                            <div class="flex items-end">
+                                <button id="scanAttendanceButton" class="btn-primary-custom w-full" data-key="scanAttendanceQR">مسح الحضور بـ QR</button>
+                            </div>
                         </div>
-                        <div>
-                            <label for="newParentPhoneNumber" class="block text-sm font-semibold text-grey-800 mb-1" data-key="parentPhoneLabel">رقم هاتف ولي الأمر:</label>
-                            <input type="text" id="newParentPhoneNumber" class="input-field" data-key-placeholder="parentPhonePlaceholder">
-                        </div>
-                    </div>
-                    <button id="addNewStudentButton" class="btn-primary-custom" data-key="addNewStudentButton">إضافة طالب جديد</button>
-        
-                    <div class="mt-6">
-                        <label for="studentSearchInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="searchStudentLabel">البحث عن طالب:</label>
-                        <input type="search" id="studentSearchInput" class="input-field" data-key-placeholder="searchPlaceholder">
-                    </div>
+                        <h4 class="text-lg font-bold mt-6 mb-2 text-gray-800" data-key="markAttendanceLabel">تسجيل الحضور:</h4>
+                        <div id="attendanceStudentsContainer" class="p-1 bg-gray-50 rounded-lg border divide-y divide-gray-200"></div>
+                        <button id="saveDailyAttendanceButton" class="btn-primary-custom mt-4" data-key="saveAttendanceButton">حفظ الحضور اليومي</button>
+                    </section>
+                </div>
 
-                    <h4 class="text-lg font-bold mt-4 mb-2 text-gray-800" data-key="allStudentsLabel">كل الطلاب في هذه المجموعة:</h4>
-                    <div id="studentsListDisplay" class="border rounded-lg overflow-hidden divide-y divide-gray-200"></div>
-                </section>
-        
-                <section class="card-container">
-                    <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="attendanceTitle">الحضور اليومي</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="attendanceDateInput" class="block text-sm font-semibold text-grey-800 mb-1" data-key="selectDateLabel">اختر التاريخ:</label>
-                            <input type="date" id="attendanceDateInput" class="input-field">
+                <div id="tab-grades" class="tab-content hidden">
+                    <section class="card-container">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="gradesTitle">إدارة الدرجات</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="assignmentSelect" class="block text-sm font-semibold text-grey-800 mb-1" data-key="selectAssignmentLabel">اختر الواجب:</label>
+                                <select id="assignmentSelect" class="input-field"></select>
+                            </div>
+                            <div>
+                                <label for="newAssignmentName" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newAssignmentNameLabel">أو أضف اسم واجب جديد:</label>
+                                <input type="text" id="newAssignmentName" class="input-field" data-key-placeholder="assignmentNamePlaceholder">
+                            </div>
+                            <div>
+                                <label for="newAssignmentDate" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newAssignmentDateLabel">تاريخ الواجب الجديد:</label>
+                                <input type="date" id="newAssignmentDate" class="input-field">
+                            </div>
+                            <div class="col-span-full md:col-span-1 lg:col-span-1">
+                                <button id="addNewAssignmentButton" class="btn-primary-custom w-full mt-2" data-key="addNewAssignmentButton">إضافة واجب جديد</button>
+                            </div>
+                             <div class="col-span-full md:col-span-1 lg:col-span-1 flex items-end">
+                                <button id="scanHomeworkButton" class="btn-primary-custom w-full mt-2" data-key="scanHomeworkQR">مسح تسليم الواجب بـ QR</button>
+                            </div>
                         </div>
-                    </div>
-                    <h4 class="text-lg font-bold mt-6 mb-2 text-gray-800" data-key="markAttendanceLabel">تسجيل الحضور:</h4>
-                    <div id="attendanceStudentsContainer" class="p-1 bg-gray-50 rounded-lg border divide-y divide-gray-200"></div>
-                    <button id="saveDailyAttendanceButton" class="btn-primary-custom mt-4" data-key="saveAttendanceButton">حفظ الحضور اليومي</button>
-                </section>
-        
-                <section class="card-container">
-                    <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="gradesTitle">إدارة الدرجات</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="assignmentSelect" class="block text-sm font-semibold text-grey-800 mb-1" data-key="selectAssignmentLabel">اختر الواجب:</label>
-                            <select id="assignmentSelect" class="input-field"></select>
-                        </div>
-                        <div>
-                            <label for="newAssignmentName" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newAssignmentNameLabel">أو أضف اسم واجب جديد:</label>
-                            <input type="text" id="newAssignmentName" class="input-field" data-key-placeholder="assignmentNamePlaceholder">
-                        </div>
-                        <div>
-                            <label for="newAssignmentDate" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newAssignmentDateLabel">تاريخ الواجب الجديد:</label>
-                            <input type="date" id="newAssignmentDate" class="input-field">
-                        </div>
-                        <div class="col-span-full md:col-span-1 lg:col-span-1">
-                            <button id="addNewAssignmentButton" class="btn-primary-custom w-full mt-2" data-key="addNewAssignmentButton">إضافة واجب جديد</button>
-                        </div>
-                    </div>
-                    <h4 class="text-lg font-bold mt-6 mb-2 text-gray-800" data-key="enterGradesLabel">أدخل الدرجات:</h4>
-                     <div id="gradesStudentsContainer" class="p-1 bg-gray-50 rounded-lg border divide-y divide-gray-200"></div>
-                    <button id="saveAssignmentGradesButton" class="btn-primary-custom mt-4" data-key="saveGradesButton">حفظ درجات الواجب</button>
-                </section>
-        
-                <section class="card-container">
-                    <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="scheduleTitle">إدارة جدول الحصص</h3>
+                        <h4 class="text-lg font-bold mt-6 mb-2 text-gray-800" data-key="enterGradesLabel">أدخل الدرجات:</h4>
+                         <div id="gradesStudentsContainer" class="p-1 bg-gray-50 rounded-lg border divide-y divide-gray-200"></div>
+                        <button id="saveAssignmentGradesButton" class="btn-primary-custom mt-4" data-key="saveGradesButton">حفظ درجات الواجب</button>
+                    </section>
+                </div>
                 
-                    <div class="p-4 border rounded-lg bg-gray-50 mb-6">
-                        <h4 class="text-lg font-bold mb-3 text-gray-800" data-key="addRecurringScheduleTitle">إضافة جدول متكرر جديد</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                            <div>
-                                <label for="recurringSubject" class="block text-sm font-semibold text-grey-800 mb-1" data-key="subjectLabel">المادة:</label>
-                                <input type="text" id="recurringSubject" class="input-field" data-key-placeholder="subjectPlaceholder">
+                <div id="tab-schedule" class="tab-content hidden">
+                     <section class="card-container">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800" data-key="scheduleTitle">إدارة جدول الحصص</h3>
+                        <div class="p-4 border rounded-lg bg-gray-50 mb-6">
+                            <h4 class="text-lg font-bold mb-3 text-gray-800" data-key="addRecurringScheduleTitle">إضافة جدول متكرر جديد</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label for="recurringSubject" class="block text-sm font-semibold text-grey-800 mb-1" data-key="subjectLabel">المادة:</label>
+                                    <input type="text" id="recurringSubject" class="input-field" data-key-placeholder="subjectPlaceholder">
+                                </div>
+                                <div>
+                                    <label for="recurringTime" class="block text-sm font-semibold text-grey-800 mb-1" data-key="timeLabel">الوقت:</label>
+                                    <input type="time" id="recurringTime" class="input-field">
+                                </div>
+                                <div>
+                                    <label for="recurringLocation" class="block text-sm font-semibold text-grey-800 mb-1" data-key="locationLabel">المكان:</label>
+                                    <input type="text" id="recurringLocation" class="input-field" data-key-placeholder="locationPlaceholder">
+                                </div>
                             </div>
-                            <div>
-                                <label for="recurringTime" class="block text-sm font-semibold text-grey-800 mb-1" data-key="timeLabel">الوقت:</label>
-                                <input type="time" id="recurringTime" class="input-field">
+                            <div class="mb-4">
+                                <label class="block text-sm font-semibold text-grey-800 mb-2" data-key="selectDaysLabel">اختر أيام الأسبوع:</label>
+                                <div id="daysOfWeekContainer" class="flex flex-wrap gap-3"></div>
+                            </div>
+                            <button id="addRecurringScheduleButton" class="btn-primary-custom" data-key="saveRecurringScheduleButton">حفظ الجدول المتكرر</button>
+                        </div>
+                        <h4 class="text-lg font-bold mt-6 mb-2 text-gray-800" data-key="mySchedulesLabel">جداولي المتكررة:</h4>
+                        <div id="recurringSchedulesDisplay" class="border rounded-lg overflow-hidden divide-y divide-gray-200 mb-6"></div>
+                        <div class="p-4 border rounded-lg bg-gray-50">
+                            <h4 class="text-lg font-bold mb-3 text-gray-800" data-key="modifySingleClassTitle">تعديل حصة واحدة</h4>
+                            <p class="text-grey-600 mb-3 text-sm" data-key="modifyClassPrompt">هل تحتاج إلى تغيير أو إلغاء حصة واحدة؟ اختر التاريخ وقم بالتغيير.</p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="exceptionDate" class="block text-sm font-semibold text-grey-800 mb-1" data-key="classDateLabel">تاريخ الحصة:</label>
+                                    <input type="date" id="exceptionDate" class="input-field">
+                                </div>
+                                <div>
+                                    <label for="exceptionNewTime" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newTimeLabel">الوقت الجديد (اختياري):</label>
+                                    <input type="time" id="exceptionNewTime" class="input-field">
+                                </div>
+                                 <div class="flex items-end">
+                                    <button id="updateSingleClassButton" class="btn-primary-custom w-full" data-key="updateClassButton">تحديث الحصة</button>
+                                </div>
+                            </div>
+                             <div class="mt-3">
+                                <button id="cancelSingleClassButton" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded w-full md:w-auto text-sm" data-key="cancelClassButton">إلغاء هذه الحصة</button>
                             </div>
                         </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-semibold text-grey-800 mb-2" data-key="selectDaysLabel">اختر أيام الأسبوع:</label>
-                            <div id="daysOfWeekContainer" class="flex flex-wrap gap-3">
-                            </div>
-                        </div>
-                        <button id="addRecurringScheduleButton" class="btn-primary-custom" data-key="saveRecurringScheduleButton">حفظ الجدول المتكرر</button>
-                    </div>
-                
-                    <h4 class="text-lg font-bold mt-6 mb-2 text-gray-800" data-key="mySchedulesLabel">جداولي المتكررة:</h4>
-                    <div id="recurringSchedulesDisplay" class="border rounded-lg overflow-hidden divide-y divide-gray-200 mb-6">
-                    </div>
-                
-                    <div class="p-4 border rounded-lg bg-gray-50">
-                        <h4 class="text-lg font-bold mb-3 text-gray-800" data-key="modifySingleClassTitle">تعديل حصة واحدة</h4>
-                        <p class="text-grey-600 mb-3 text-sm" data-key="modifyClassPrompt">هل تحتاج إلى تغيير أو إلغاء حصة واحدة؟ اختر التاريخ وقم بالتغيير.</p>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label for="exceptionDate" class="block text-sm font-semibold text-grey-800 mb-1" data-key="classDateLabel">تاريخ الحصة:</label>
-                                <input type="date" id="exceptionDate" class="input-field">
-                            </div>
-                            <div>
-                                <label for="exceptionNewTime" class="block text-sm font-semibold text-grey-800 mb-1" data-key="newTimeLabel">الوقت الجديد (اختياري):</label>
-                                <input type="time" id="exceptionNewTime" class="input-field">
-                            </div>
-                             <div class="flex items-end">
-                                <button id="updateSingleClassButton" class="btn-primary-custom w-full" data-key="updateClassButton">تحديث الحصة</button>
-                            </div>
-                        </div>
-                         <div class="mt-3">
-                            <button id="cancelSingleClassButton" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded w-full md:w-auto text-sm" data-key="cancelClassButton">إلغاء هذه الحصة</button>
-                        </div>
-                    </div>
-                </section>
+                    </section>
+                </div>
             </div>
         </div>
     </main>
 
+    <div id="qrCodeModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-[2000]">
+        <div class="bg-white p-6 rounded-lg text-center max-w-sm w-full">
+            <div id="printableIdCard" class="p-4 border-2 border-gray-300 rounded-lg bg-white text-black">
+                <div class="flex items-center pb-3 border-b-2 border-gray-200 mb-3">
+                    <img src="assets/images/learnaria_logo.png" alt="Logo" class="h-12 w-12 rounded-full mr-3">
+                    <div>
+                        <h3 class="text-xl font-bold text-left text-gray-800">Learnaria Student ID</h3>
+                        <p id="idTeacherName" class="text-sm text-gray-600 text-left">Teacher: Mohamed Ali</p>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center text-center mt-4">
+                    <div id="idQrcode" class="flex justify-center p-1 border rounded-md mb-4"></div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Student Name:</p>
+                        <h4 id="idStudentName" class="text-2xl font-bold text-gray-900">Student's Full Name</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 flex gap-4">
+                 <button id="printIdButton" class="btn-primary-custom flex-1">طباعة ID</button>
+                 <button id="closeQrModal" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex-1">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scannerModal" class="hidden fixed inset-0 bg-black flex flex-col items-center justify-between p-4 z-[2000]">
+        <p class="text-white text-lg flex-shrink-0">وجّه الكاميرا نحو الـ QR Code</p>
+        <div class="relative w-full flex-grow flex items-center justify-center my-2">
+            <video id="scannerVideo" playsinline></video>
+            <div id="scannerOverlay" class="absolute inset-0 border-8 border-transparent transition-all duration-200 pointer-events-none"></div>
+            <p id="scannedStudentName" class="absolute bottom-5 bg-black bg-opacity-70 text-white text-2xl p-3 rounded-lg transition-opacity duration-300 opacity-0"></p>
+        </div>
+        <div class="flex-shrink-0">
+            <button id="closeScannerModal" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg text-lg">
+                إنهاء المسح والعودة
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="js/script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => console.log('ServiceWorker registration successful with scope: ', registration.scope))
+                    .catch(err => console.log('ServiceWorker registration failed: ', err));
+            });
+        }
+    </script>
 </body>
 </html>
