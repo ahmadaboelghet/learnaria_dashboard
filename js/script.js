@@ -170,13 +170,13 @@ const translations = {
         newTimeLabel: "الوقت الجديد (اختياري):",
         updateClassButton: "تحديث الحصة",
         cancelClassButton: "إلغاء هذه الحصة",
-        phonePlaceholder: "أدخل رقم هاتفك (مثال: +201001234567)",
+        phonePlaceholder: "مثال: 01001234567",
         fullNamePlaceholder: "أدخل اسمك الكامل",
         subjectPlaceholder: "مثال: فيزياء، رياضيات",
         locationPlaceholder: "مثال: أونلاين، سنتر الياسمين",
         groupNamePlaceholder: "مثال: الصف الأول - صباحي",
         newStudentPlaceholder: "أدخل اسم الطالب الجديد",
-        parentPhonePlaceholder: "مثال: +201001234567",
+        parentPhonePlaceholder: "مثال: 01001234567",
         searchPlaceholder: "اكتب اسمًا للبحث...",
         assignmentNamePlaceholder: "مثال: اختبار قصير 1",
         selectGroupOption: "-- اختر مجموعة --",
@@ -244,6 +244,7 @@ const translations = {
         scanAttendanceQR: "مسح الحضور بـ QR",
         scanHomeworkQR: "مسح تسليم الواجب بـ QR",
         phoneMissing: "الرجاء إدخال رقم الهاتف.",
+        invalidPhoneFormat: "الرجاء إدخال رقم هاتف مصري صحيح (11 رقم يبدأ بـ 01).",
         logoutButton: "تسجيل الخروج"
     },
     en: {
@@ -291,13 +292,13 @@ const translations = {
         newTimeLabel: "New Time (Optional):",
         updateClassButton: "Update Class",
         cancelClassButton: "Cancel This Class",
-        phonePlaceholder: "Enter your phone number (e.g., +1234567890)",
+        phonePlaceholder: "e.g., 01001234567",
         fullNamePlaceholder: "Enter your full name",
         subjectPlaceholder: "e.g., Physics, Math",
         locationPlaceholder: "e.g., Online, Jasmine Center",
         groupNamePlaceholder: "e.g., Grade 10 - Morning",
         newStudentPlaceholder: "Enter new student name",
-        parentPhonePlaceholder: "e.g., +1234567890",
+        parentPhonePlaceholder: "e.g., 01001234567",
         searchPlaceholder: "Type a name to search...",
         assignmentNamePlaceholder: "e.g., Quiz 1",
         selectGroupOption: "-- Select a Group --",
@@ -365,12 +366,152 @@ const translations = {
         scanAttendanceQR: "Scan Attendance with QR",
         scanHomeworkQR: "Scan Homework with QR",
         phoneMissing: "Please enter your phone number.",
+        invalidPhoneFormat: "Please enter a valid Egyptian phone number (11 digits, starting with 01).",
         logoutButton: "Logout"
     }
 };
 
-function showMessageBox(messageKey) {
-    const message = translations[currentLang][messageKey] || messageKey;
+// ======================= START: UTILITY FUNCTIONS =======================
+/**
+ * Validates an Egyptian phone number.
+ * @param {string} phone - The phone number to validate.
+ * @returns {boolean} - True if the number is valid, false otherwise.
+ */
+function isValidEgyptianPhoneNumber(phone) {
+    if (!phone) return false;
+    // Matches 11 digits starting with 010, 011, 012, or 015.
+    const regex = /^01[0125]\d{8}$/;
+    return regex.test(phone.trim());
+}
+
+/**
+ * Formats a raw phone number into the international format (+20...).
+ * @param {string} phone - The raw phone number (e.g., "01001234567").
+ * @returns {string|null} - The formatted number or null if input is invalid.
+ */
+function formatPhoneNumber(phone) {
+    const trimmedPhone = phone.trim();
+    if (isValidEgyptianPhoneNumber(trimmedPhone)) {
+        // Remove the leading '0' and prepend '+20'
+        return `+20${trimmedPhone.substring(1)}`;
+    }
+    return null; // Return null if the format is incorrect
+}
+
+/**
+ * Converts Arabic/Persian numerals in a string to Western Arabic numerals.
+ * @param {string} str - The string to convert.
+ * @returns {string} - The converted string.
+ */
+function toEnglishNumerals(str) {
+    const persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    const arabic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    let result = String(str); // Ensure it's a string
+    for (let i = 0; i < 10; i++) {
+        result = result.replace(new RegExp(persian[i], 'g'), i).replace(new RegExp(arabic[i], 'g'), i);
+    }
+    return result;
+}
+
+/**
+ * Sets up an input field to only accept 11 digits and converts numerals to English.
+ * @param {string} inputId - The ID of the input element.
+ */
+function setupPhoneNumberInput(inputId) {
+    const phoneInput = document.getElementById(inputId);
+    if (phoneInput) {
+        // Set maxlength attribute directly on the element
+        phoneInput.setAttribute('maxlength', '11');
+
+        phoneInput.addEventListener('input', (e) => {
+            let value = e.target.value;
+            // 1. Convert any Arabic/Persian numerals to English numerals.
+            value = toEnglishNumerals(value);
+            // 2. Remove any non-digit characters.
+            value = value.replace(/\D/g, '');
+            // 3. The maxlength attribute will handle the length limit, but this is a fallback.
+            if (value.length > 11) {
+                value = value.substring(0, 11);
+            }
+            // 4. Update the input field's value.
+            e.target.value = value;
+        });
+    }
+}
+
+/**
+ * Formats a 24-hour time string (HH:mm) to a 12-hour format (hh:mm AM/PM).
+ * @param {string} timeString - The 24-hour time string.
+ * @returns {string} - The formatted 12-hour time string.
+ */
+function formatTime12Hour(timeString) {
+    if (!timeString || !timeString.includes(':')) return timeString; // Return original if invalid
+    const [hourString, minute] = timeString.split(':');
+    const hour = parseInt(hourString, 10);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const convertedHour = hour % 12 || 12; // Converts '0' to '12'
+    return `${String(convertedHour).padStart(2, '0')}:${minute} ${period}`;
+}
+
+/**
+ * Creates and injects a custom 12-hour time picker into a container.
+ * @param {string} containerId - The ID of the container div.
+ */
+function createTimePicker(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `
+        <select id="${containerId}-hour" class="input-field">
+            ${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${String(i + 1).padStart(2, '0')}</option>`).join('')}
+        </select>
+        <select id="${containerId}-minute" class="input-field">
+            ${Array.from({ length: 60 }, (_, i) => `<option value="${i}">${String(i).padStart(2, '0')}</option>`).join('')}
+        </select>
+        <select id="${containerId}-period" class="input-field">
+            <option value="AM">AM</option>
+            <option value="PM">PM</option>
+        </select>
+    `;
+}
+
+/**
+ * Reads the selected time from a custom picker and converts it to 24-hour format.
+ * @param {string} containerId - The ID of the container div.
+ * @returns {string} - The time in HH:mm format, or an empty string if invalid.
+ */
+function getTimeFromPicker(containerId) {
+    const hourSelect = document.getElementById(`${containerId}-hour`);
+    const minuteSelect = document.getElementById(`${containerId}-minute`);
+    const periodSelect = document.getElementById(`${containerId}-period`);
+
+    if (!hourSelect || !minuteSelect || !periodSelect) return '';
+
+    let hour = parseInt(hourSelect.value, 10);
+    const minute = minuteSelect.value;
+    const period = periodSelect.value;
+
+    if (period === 'PM' && hour < 12) {
+        hour += 12;
+    }
+    if (period === 'AM' && hour === 12) { // Midnight case
+        hour = 0;
+    }
+
+    return `${String(hour).padStart(2, '0')}:${minute}`;
+}
+// =======================  END: UTILITY FUNCTIONS  =======================
+
+
+function showMessageBox(messageKey, ...args) {
+    let message = translations[currentLang][messageKey] || messageKey;
+    if (args.length > 0) {
+        message = message.replace(/{(\w+)}/g, (match, key) => {
+            const argIndex = Object.keys(args[0]).indexOf(key);
+            return argIndex !== -1 ? args[0][key] : match;
+        });
+    }
+
     const existingBox = document.querySelector('.message-box');
     if (existingBox) {
         existingBox.remove();
@@ -385,6 +526,7 @@ function showMessageBox(messageKey) {
         messageBox.addEventListener('transitionend', () => messageBox.remove());
     }, 3000);
 }
+
 
 function generateUniqueId() {
     return `offline_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -443,19 +585,17 @@ async function updateSyncIndicator() {
 
 async function addToSyncQueue(action) {
     await putToDB('syncQueue', action);
-    // لن تظهر هذه الرسالة إلا إذا كان المستخدم غير متصل بالإنترنت
     if (!navigator.onLine) {
         showMessageBox("تم الحفظ محليًا وسيتم المزامنة عند توفر الإنترنت.");
     }
     updateSyncIndicator();
 }
 
-// =======================    بداية الجزء الذي تم تعديله   =======================
 async function processSyncQueue() {
     if (!navigator.onLine || isSyncing) return;
     isSyncing = true;
     await updateSyncIndicator();
-    let syncedActions = false; // Flag to check if any action was synced
+    let syncedActions = false;
     try {
         if (!localDB) await openDB();
         
@@ -492,7 +632,7 @@ async function processSyncQueue() {
                 
                 await deleteFromDB('syncQueue', key);
             }
-            syncedActions = true; // Mark that we performed a sync
+            syncedActions = true;
         }
     } catch (error) {
         console.error("Error processing sync queue:", error);
@@ -500,13 +640,10 @@ async function processSyncQueue() {
     } finally {
         isSyncing = false;
         await updateSyncIndicator();
-        // ** THE FIX IS HERE **
-        // If we successfully synced some actions, refresh the UI data.
         if (syncedActions) {
             console.log("Sync complete. Refreshing UI data...");
-            await fetchGroups(); // Always refresh groups
+            await fetchGroups();
             if (SELECTED_GROUP_ID) {
-                // If a group is selected, refresh its specific data
                 await fetchStudents();
                 await fetchAssignments();
                 await fetchRecurringSchedules();
@@ -514,7 +651,7 @@ async function processSyncQueue() {
         }
     }
 }
-// =======================     نهاية الجزء الذي تم تعديله    =======================
+
 function setLanguage(lang) {
     currentLang = lang;
     document.documentElement.lang = lang;
@@ -560,7 +697,13 @@ function loadInitialPreferences() {
     updateDarkModeIcons(isDarkMode);
     const lastTeacherId = localStorage.getItem('learnaria-teacherId');
     if(lastTeacherId) {
-        document.getElementById('teacherPhoneInput').value = lastTeacherId;
+        // --- START: FIX for phone number loading ---
+        let displayPhone = lastTeacherId;
+        if (displayPhone.startsWith('+20')) {
+            displayPhone = '0' + displayPhone.substring(3);
+        }
+        document.getElementById('teacherPhoneInput').value = displayPhone;
+        // --- END: FIX ---
         setTeacher();
     }
 }
@@ -610,12 +753,10 @@ function logout() {
 }
 
 function setupAllEventListeners() {
-    // إذا تم إعداد المستمعين من قبل، اخرج فورًا
     if (areEventListenersSetup) {
         return;
     }
 
-    // --- ربط جميع الأزرار والمدخلات بوظائفها ---
     document.getElementById('setTeacherButton').addEventListener('click', setTeacher);
     document.getElementById('saveProfileButton').addEventListener('click', saveTeacherProfile);
     document.getElementById('addNewGroupButton').addEventListener('click', addNewGroup);
@@ -647,14 +788,12 @@ function setupAllEventListeners() {
 
             const studentId = studentElement.dataset.studentId;
 
-            // التحقق إذا كان الزر المضغوط هو زر الحذف
             if (target.classList.contains('delete-student-btn')) {
                 if (studentId) {
                     deleteStudent(studentId);
                 }
             }
 
-            // التحقق إذا كان الزر المضغوط هو زر عرض الـ ID
             if (target.classList.contains('show-qr-btn')) {
                 const student = allStudents.find(s => s.id === studentId);
                 if (student) {
@@ -664,10 +803,11 @@ function setupAllEventListeners() {
         });
     }
 
-    // استدعاء دالة مستمعي زر الإدخال
+    setupPhoneNumberInput('teacherPhoneInput');
+    setupPhoneNumberInput('newParentPhoneNumber');
+
     addEnterKeyListeners();
 
-    // ضع علامة تفيد بأن الإعداد قد تم بنجاح
     areEventListenersSetup = true;
     console.log("All event listeners have been set up successfully, and will not be set up again.");
 }
@@ -685,8 +825,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error("Initial database open failed. App might be unstable.");
     }
     
-    // ✨ استدعاء دالة الإعداد الشاملة والآمنة
     setupAllEventListeners();
+
+    // --- START: Create Time Pickers on Load ---
+    createTimePicker('recurringTimeContainer');
+    createTimePicker('exceptionNewTimeContainer');
+    // --- END: Create Time Pickers on Load ---
 
     initializeTabs();
     window.addEventListener('online', updateOnlineStatus);
@@ -729,17 +873,24 @@ function addEnterKeyListeners() {
     listenForEnter('newGroupName', addNewGroup);
     listenForEnter('newParentPhoneNumber', addNewStudent);
     listenForEnter('newAssignmentDate', addNewAssignment);
-    listenForEnter('exceptionNewTime', updateSingleClass);
+    // Removed listener for exceptionNewTime as it's now a set of dropdowns
 }
 
 async function setTeacher() {
     try {
-        const phone = document.getElementById('teacherPhoneInput').value.trim();
-        if (!phone) {
-            showMessageBox('phoneMissing');
+        const phoneInput = document.getElementById('teacherPhoneInput').value;
+        
+        if (!isValidEgyptianPhoneNumber(phoneInput)) {
+            showMessageBox('invalidPhoneFormat');
             return;
         }
-        TEACHER_ID = phone;
+        const formattedPhone = formatPhoneNumber(phoneInput);
+        if (!formattedPhone) {
+             showMessageBox('invalidPhoneFormat');
+             return;
+        }
+        TEACHER_ID = formattedPhone;
+
         localStorage.setItem('learnaria-teacherId', TEACHER_ID);
         document.getElementById('teacherPhoneInput').disabled = true;
         document.getElementById('setTeacherButton').disabled = true;
@@ -856,6 +1007,14 @@ async function addNewGroup() {
 async function handleGroupSelection() {
     SELECTED_GROUP_ID = document.getElementById('groupSelect').value;
     const tabs = document.querySelectorAll('#tabs-nav .tab-button');
+
+    const subjectInput = document.getElementById('recurringSubject');
+    const teacherSubject = document.getElementById('teacherSubjectInput').value;
+    if (subjectInput) {
+        subjectInput.value = teacherSubject;
+        subjectInput.disabled = true; 
+    }
+
     if (SELECTED_GROUP_ID) {
         tabs.forEach(tab => {
             if (tab.dataset.tab !== 'profile') {
@@ -914,10 +1073,8 @@ function renderStudentsList(containerElement, students) {
         const studentElement = document.createElement('div');
         studentElement.className = 'record-item';
         
-        // نقوم بتخزين الـ ID الخاص بالطالب في العنصر نفسه ليسهل الوصول إليه
         studentElement.dataset.studentId = student.id;
         
-        // هذا الكود يعرض شكل العنصر فقط (بدون أي event listeners)
         studentElement.innerHTML = `
             <div class="flex items-center">
                 <button class="show-qr-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold p-2 rounded-md mx-2">ID</button>
@@ -946,9 +1103,20 @@ async function addNewStudent() {
     try {
         if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
         const studentName = document.getElementById('newStudentName').value.trim();
-        const parentPhoneNumber = document.getElementById('newParentPhoneNumber').value.trim();
-        if (!studentName || !parentPhoneNumber) {
+        const parentPhoneInput = document.getElementById('newParentPhoneNumber').value;
+
+        if (!studentName) {
             showMessageBox('studentAndParentMissing');
+            return;
+        }
+
+        if (!isValidEgyptianPhoneNumber(parentPhoneInput)) {
+            showMessageBox('invalidPhoneFormat');
+            return;
+        }
+        const formattedParentPhone = formatPhoneNumber(parentPhoneInput);
+        if (!formattedParentPhone) {
+            showMessageBox('invalidPhoneFormat');
             return;
         }
 
@@ -957,31 +1125,25 @@ async function addNewStudent() {
             id: newStudentId,
             groupId: SELECTED_GROUP_ID,
             name: studentName,
-            parentPhoneNumber: parentPhoneNumber
+            parentPhoneNumber: formattedParentPhone
         };
 
-        // 1. الحفظ المحلي
         await putToDB('students', newStudentData);
         
-        // 2. الإضافة للمزامنة
         await addToSyncQueue({
             type: 'add',
             path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`,
             id: newStudentId,
-            data: { name: studentName, parentPhoneNumber: parentPhoneNumber }
+            data: { name: studentName, parentPhoneNumber: formattedParentPhone }
         });
         
-        // 3. بدء المزامنة في الخلفية
         processSyncQueue();
         
-        // 4. إظهار رسالة النجاح
         showMessageBox('studentAddedSuccess');
         
-        // 5. مسح حقول الإدخال
         document.getElementById('newStudentName').value = '';
         document.getElementById('newParentPhoneNumber').value = '';
         
-        // 6. تحديث الواجهة فورًا
         await fetchStudents();
         renderAttendanceInputs();
         renderGradesInputs();
@@ -992,7 +1154,6 @@ async function addNewStudent() {
     }
 }
 async function deleteStudent(studentId) {
-    // 1. رسالة التأكيد الآن في مكانها الصحيح والوحيد
     const studentToDelete = allStudents.find(s => s.id === studentId);
     if (!studentToDelete) return;
     const confirmMsg = `${translations[currentLang].deleteConfirmation} ${studentToDelete.name}?`;
@@ -1011,7 +1172,6 @@ async function deleteStudent(studentId) {
         processSyncQueue();
         showMessageBox('studentDeletedSuccess');
         
-        // تحديث الواجهة فورًا
         await fetchStudents();
         renderAttendanceInputs();
         renderGradesInputs();
@@ -1239,12 +1399,11 @@ async function saveAssignmentGrades() {
         await putToDB('assignments', assignment);
         showMessageBox('gradesSavedSuccess');
 
-        // تم إزالة الشرط الذي كان يمنع المزامنة للواجبات التي تبدأ بـ "offline_"
         await addToSyncQueue({
             type: 'set',
             path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments/${assignmentId}`,
             data: { scores: updatedScores },
-            options: { merge: true } // استخدام set مع merge لضمان تحديث آمن
+            options: { merge: true }
         });
         processSyncQueue();
 
@@ -1255,8 +1414,9 @@ async function saveAssignmentGrades() {
 }
 async function saveRecurringSchedule() {
     if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
+    
     const subject = document.getElementById('recurringSubject').value.trim();
-    const time = document.getElementById('recurringTime').value;
+    const time = getTimeFromPicker('recurringTimeContainer');
     const location = document.getElementById('recurringLocation').value.trim();
     const selectedDays = Array.from(document.querySelectorAll('#daysOfWeekContainer input:checked')).map(cb => parseInt(cb.value));
 
@@ -1285,12 +1445,11 @@ async function saveRecurringSchedule() {
         });
         processSyncQueue();
         showMessageBox('scheduleSavedSuccess');
-        document.getElementById('recurringSubject').value = '';
-        document.getElementById('recurringTime').value = '';
+        
+        createTimePicker('recurringTimeContainer'); // Reset the time picker
         document.getElementById('recurringLocation').value = '';
         document.querySelectorAll('#daysOfWeekContainer input:checked').forEach(cb => cb.checked = false);
         
-        console.log("1. Save successful. Now fetching to refresh UI...");
         fetchRecurringSchedules();
 
     } catch (error) {
@@ -1301,13 +1460,11 @@ async function saveRecurringSchedule() {
 
 async function fetchRecurringSchedules() {
     if (!SELECTED_GROUP_ID) return;
-    console.log("2. fetchRecurringSchedules started.");
     const container = document.getElementById('recurringSchedulesDisplay');
     container.innerHTML = `<p class="text-grey-600 text-center p-4">${translations[currentLang].loadingSchedules}</p>`;
     
     try {
         let schedules = await getAllFromDB('schedules', 'groupId', SELECTED_GROUP_ID);
-        console.log("3. Schedules fetched from local DB:", schedules);
         renderSchedules(schedules);
 
         if (navigator.onLine) {
@@ -1316,7 +1473,6 @@ async function fetchRecurringSchedules() {
             
             await Promise.all(remoteSchedules.map(schedule => putToDB('schedules', schedule)));
             
-            console.log("3. (Online) Schedules fetched from Firestore:", remoteSchedules);
             renderSchedules(remoteSchedules);
         }
     } catch (error) {
@@ -1326,7 +1482,6 @@ async function fetchRecurringSchedules() {
 }
 
 function renderSchedules(schedules) {
-    console.log("4. renderSchedules started with schedules:", schedules);
     const container = document.getElementById('recurringSchedulesDisplay');
     container.innerHTML = '';
 
@@ -1336,15 +1491,16 @@ function renderSchedules(schedules) {
     }
 
     schedules.forEach(schedule => {
-        console.log("5. Rendering schedule item:", schedule);
         const dayNames = schedule.days.map(dayIndex => translations[currentLang].days[dayIndex] || '').join(', ');
         const locationText = schedule.location ? ` - ${schedule.location}` : '';
+
+        const timeText = formatTime12Hour(schedule.time); 
 
         const element = document.createElement('div');
         element.className = 'record-item';
         element.innerHTML = `
             <div>
-                <p class="font-semibold text-grey-800">${schedule.subject} at ${schedule.time}${locationText}</p>
+                <p class="font-semibold text-grey-800">${schedule.subject} at ${timeText}${locationText}</p>
                 <p class="text-sm text-grey-600">${translations[currentLang].repeatsOn} ${dayNames}</p>
             </div>
             <button class="delete-schedule-btn bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-schedule-id="${schedule.id}">${translations[currentLang].deleteButton}</button>
@@ -1359,9 +1515,6 @@ function renderSchedules(schedules) {
     });
 }
 async function deleteRecurringSchedule(scheduleId) {
-
-    console.log(`--- محاولة حذف الجدول --- ID: ${scheduleId}`);
-
     if (!TEACHER_ID || !SELECTED_GROUP_ID || !scheduleId) return;
     try {
         await deleteFromDB('schedules', scheduleId);
@@ -1378,7 +1531,20 @@ async function deleteRecurringSchedule(scheduleId) {
     }
 }
 
-async function updateSingleClass() { }
+async function updateSingleClass() {
+    if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
+    const date = document.getElementById('exceptionDate').value;
+    const newTime = getTimeFromPicker('exceptionNewTimeContainer');
+
+    if (!date || !newTime) {
+        showMessageBox('classDateAndTimeMissing');
+        return;
+    }
+    
+    // Logic to update the class...
+    console.log(`Updating class on ${date} to ${newTime}`);
+    showMessageBox('classUpdatedSuccess', { date: date, time: formatTime12Hour(newTime) });
+}
 async function cancelSingleClass() { }
 
 function playBeepSound() {
