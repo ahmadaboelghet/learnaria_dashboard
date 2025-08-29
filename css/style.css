@@ -361,3 +361,26 @@ html[dir="rtl"] .homework-checkbox-container input { margin-left: 0.4rem; }
 #scannerOverlay.error {
     border-color: rgb(239, 68, 68); /* Tailwind's red-500 */
 }
+/* Animation للنقاط المتحركة بجانب نص المزامنة */
+.syncing-text-animated::after {
+  display: inline-block;
+  animation: ellipsis 1.5s infinite;
+  content: "";
+  width: 20px; /* نعطيها عرضًا ثابتًا لمنع اهتزاز النص */
+  text-align: left;
+}
+
+@keyframes ellipsis {
+  0% {
+    content: ".";
+  }
+  33% {
+    content: "..";
+  }
+  66% {
+    content: "...";
+  }
+  100% {
+    content: ".";
+  }
+}

@@ -121,6 +121,8 @@ let qrCodeModal, scannerModal, videoElement;
 let currentScannerMode = null; 
 let animationFrameId = null;
 let isScannerPaused = false;
+let areEventListenersSetup = false;
+let isAddingStudent = false;
 
 const translations = {
     ar: {
@@ -441,14 +443,19 @@ async function updateSyncIndicator() {
 
 async function addToSyncQueue(action) {
     await putToDB('syncQueue', action);
-    showMessageBox("تم الحفظ محليًا وسيتم المزامنة عند توفر الإنترنت.");
+    // لن تظهر هذه الرسالة إلا إذا كان المستخدم غير متصل بالإنترنت
+    if (!navigator.onLine) {
+        showMessageBox("تم الحفظ محليًا وسيتم المزامنة عند توفر الإنترنت.");
+    }
     updateSyncIndicator();
 }
 
+// =======================    بداية الجزء الذي تم تعديله   =======================
 async function processSyncQueue() {
- if (!navigator.onLine || isSyncing) return;
+    if (!navigator.onLine || isSyncing) return;
     isSyncing = true;
     await updateSyncIndicator();
+    let syncedActions = false; // Flag to check if any action was synced
     try {
         if (!localDB) await openDB();
         
@@ -468,30 +475,46 @@ async function processSyncQueue() {
         });
 
         const [keys, values] = await Promise.all([getAllKeysPromise, getAllValuesPromise]);
-
         const actions = values.map((val, i) => ({ ...val, key: keys[i] }));
 
         if (actions.length > 0) {
             for (const action of actions) {
-                const { type, path, data, id, key } = action;
+                const { type, path, data, id, key, options } = action;
+                
                 if (type === 'set') {
-                    await firestoreDB.doc(path).set(data, { merge: true });
+                    await firestoreDB.doc(path).set(data, options || { merge: true });
                 } else if (type === 'add') {
-                    await firestoreDB.collection(path).doc(id).set(data);
+                    await firestoreDB.collection(path).doc(id).set(data, { merge: true });
                 } else if (type === 'delete') {
+                    console.log(`%c Firestore Deleting Path: ${path}`, 'color: red; font-weight: bold;');
                     await firestoreDB.doc(path).delete();
                 }
+                
                 await deleteFromDB('syncQueue', key);
             }
+            syncedActions = true; // Mark that we performed a sync
         }
     } catch (error) {
         console.error("Error processing sync queue:", error);
+        
     } finally {
         isSyncing = false;
         await updateSyncIndicator();
+        // ** THE FIX IS HERE **
+        // If we successfully synced some actions, refresh the UI data.
+        if (syncedActions) {
+            console.log("Sync complete. Refreshing UI data...");
+            await fetchGroups(); // Always refresh groups
+            if (SELECTED_GROUP_ID) {
+                // If a group is selected, refresh its specific data
+                await fetchStudents();
+                await fetchAssignments();
+                await fetchRecurringSchedules();
+            }
+        }
     }
 }
-
+// =======================     نهاية الجزء الذي تم تعديله    =======================
 function setLanguage(lang) {
     currentLang = lang;
     document.documentElement.lang = lang;
@@ -586,22 +609,13 @@ function logout() {
     location.reload();
 }
 
-document.addEventListener('DOMContentLoaded', async function() {
-    statusIndicator = document.getElementById('statusIndicator');
-    syncIndicator = document.getElementById('syncIndicator');
-    qrCodeModal = document.getElementById('qrCodeModal');
-    scannerModal = document.getElementById('scannerModal');
-    videoElement = document.getElementById('scannerVideo');
-    
-    try {
-        await openDB();
-    } catch (error) {
-        console.error("Initial database open failed. App might be unstable.");
+function setupAllEventListeners() {
+    // إذا تم إعداد المستمعين من قبل، اخرج فورًا
+    if (areEventListenersSetup) {
+        return;
     }
-    initializeTabs();
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
-    updateOnlineStatus();
+
+    // --- ربط جميع الأزرار والمدخلات بوظائفها ---
     document.getElementById('setTeacherButton').addEventListener('click', setTeacher);
     document.getElementById('saveProfileButton').addEventListener('click', saveTeacherProfile);
     document.getElementById('addNewGroupButton').addEventListener('click', addNewGroup);
@@ -619,12 +633,66 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('darkModeToggleButton').addEventListener('click', toggleDarkMode);
     document.getElementById('languageToggleButton').addEventListener('click', toggleLanguage);
     document.getElementById('logoutButton').addEventListener('click', logout);
-    addEnterKeyListeners();
     document.getElementById('closeQrModal').addEventListener('click', () => qrCodeModal.classList.add('hidden'));
     document.getElementById('closeScannerModal').addEventListener('click', stopScanner);
     document.getElementById('scanAttendanceButton').addEventListener('click', () => startScanner('attendance'));
     document.getElementById('scanHomeworkButton').addEventListener('click', () => startScanner('homework'));
     document.getElementById('printIdButton').addEventListener('click', () => window.print());
+     const studentsListContainer = document.getElementById('studentsListDisplay');
+    if (studentsListContainer) {
+        studentsListContainer.addEventListener('click', function(event) {
+            const target = event.target;
+            const studentElement = target.closest('.record-item');
+            if (!studentElement) return;
+
+            const studentId = studentElement.dataset.studentId;
+
+            // التحقق إذا كان الزر المضغوط هو زر الحذف
+            if (target.classList.contains('delete-student-btn')) {
+                if (studentId) {
+                    deleteStudent(studentId);
+                }
+            }
+
+            // التحقق إذا كان الزر المضغوط هو زر عرض الـ ID
+            if (target.classList.contains('show-qr-btn')) {
+                const student = allStudents.find(s => s.id === studentId);
+                if (student) {
+                    showStudentQRCode(student);
+                }
+            }
+        });
+    }
+
+    // استدعاء دالة مستمعي زر الإدخال
+    addEnterKeyListeners();
+
+    // ضع علامة تفيد بأن الإعداد قد تم بنجاح
+    areEventListenersSetup = true;
+    console.log("All event listeners have been set up successfully, and will not be set up again.");
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+    statusIndicator = document.getElementById('statusIndicator');
+    syncIndicator = document.getElementById('syncIndicator');
+    qrCodeModal = document.getElementById('qrCodeModal');
+    scannerModal = document.getElementById('scannerModal');
+    videoElement = document.getElementById('scannerVideo');
+    
+    try {
+        await openDB();
+    } catch (error) {
+        console.error("Initial database open failed. App might be unstable.");
+    }
+    
+    // ✨ استدعاء دالة الإعداد الشاملة والآمنة
+    setupAllEventListeners();
+
+    initializeTabs();
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+    
     window.addEventListener('online', processSyncQueue);
     loadInitialPreferences();
     processSyncQueue();
@@ -841,9 +909,15 @@ function renderStudentsList(containerElement, students) {
     const parentLabel = translations[currentLang].parentLabel;
     const notAvailable = translations[currentLang].notAvailable;
     const deleteBtnText = translations[currentLang].deleteButton;
+
     students.forEach(student => {
         const studentElement = document.createElement('div');
         studentElement.className = 'record-item';
+        
+        // نقوم بتخزين الـ ID الخاص بالطالب في العنصر نفسه ليسهل الوصول إليه
+        studentElement.dataset.studentId = student.id;
+        
+        // هذا الكود يعرض شكل العنصر فقط (بدون أي event listeners)
         studentElement.innerHTML = `
             <div class="flex items-center">
                 <button class="show-qr-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold p-2 rounded-md mx-2">ID</button>
@@ -852,16 +926,9 @@ function renderStudentsList(containerElement, students) {
                     <p class="text-sm text-grey-600">${parentLabel} ${student.parentPhoneNumber || notAvailable}</p>
                 </div>
             </div>
-            <button class="delete-student-btn bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-student-id="${student.id}" data-student-name="${student.name}">${deleteBtnText}</button>
+            <button class="delete-student-btn bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm">${deleteBtnText}</button>
         `;
         containerElement.appendChild(studentElement);
-        studentElement.querySelector('.show-qr-btn').addEventListener('click', () => showStudentQRCode(student));
-        studentElement.querySelector('.delete-student-btn').addEventListener('click', function() {
-            const confirmMsg = `${translations[currentLang].deleteConfirmation} ${this.dataset.studentName}?`;
-            if (confirm(confirmMsg)) {
-                deleteStudent(this.dataset.studentId);
-            }
-        });
     });
 }
 
@@ -881,9 +948,10 @@ async function addNewStudent() {
         const studentName = document.getElementById('newStudentName').value.trim();
         const parentPhoneNumber = document.getElementById('newParentPhoneNumber').value.trim();
         if (!studentName || !parentPhoneNumber) {
-             showMessageBox('studentAndParentMissing');
-             return;
+            showMessageBox('studentAndParentMissing');
+            return;
         }
+
         const newStudentId = generateUniqueId();
         const newStudentData = {
             id: newStudentId,
@@ -891,41 +959,63 @@ async function addNewStudent() {
             name: studentName,
             parentPhoneNumber: parentPhoneNumber
         };
+
+        // 1. الحفظ المحلي
         await putToDB('students', newStudentData);
-        showMessageBox('studentAddedSuccess');
-        document.getElementById('newStudentName').value = '';
-        document.getElementById('newParentPhoneNumber').value = '';
-        await fetchStudents(); 
-        renderAttendanceInputs();
-        renderGradesInputs();
+        
+        // 2. الإضافة للمزامنة
         await addToSyncQueue({
             type: 'add',
             path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students`,
             id: newStudentId,
             data: { name: studentName, parentPhoneNumber: parentPhoneNumber }
         });
+        
+        // 3. بدء المزامنة في الخلفية
         processSyncQueue();
+        
+        // 4. إظهار رسالة النجاح
+        showMessageBox('studentAddedSuccess');
+        
+        // 5. مسح حقول الإدخال
+        document.getElementById('newStudentName').value = '';
+        document.getElementById('newParentPhoneNumber').value = '';
+        
+        // 6. تحديث الواجهة فورًا
+        await fetchStudents();
+        renderAttendanceInputs();
+        renderGradesInputs();
+
     } catch (error) {
         console.error("Error adding student:", error);
         showMessageBox('studentAddedError');
     }
 }
-
 async function deleteStudent(studentId) {
+    // 1. رسالة التأكيد الآن في مكانها الصحيح والوحيد
+    const studentToDelete = allStudents.find(s => s.id === studentId);
+    if (!studentToDelete) return;
+    const confirmMsg = `${translations[currentLang].deleteConfirmation} ${studentToDelete.name}?`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+
     try {
         if (!TEACHER_ID || !SELECTED_GROUP_ID || !studentId) return;
+
         await deleteFromDB('students', studentId);
+        await addToSyncQueue({
+            type: 'delete',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students/${studentId}`
+        });
+        processSyncQueue();
         showMessageBox('studentDeletedSuccess');
+        
+        // تحديث الواجهة فورًا
         await fetchStudents();
         renderAttendanceInputs();
         renderGradesInputs();
-        if (!studentId.startsWith('offline_')) {
-            await addToSyncQueue({
-                type: 'delete',
-                path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/students/${studentId}`
-            });
-            processSyncQueue();
-        }
+
     } catch (error) {
         console.error("Error deleting student:", error);
         showMessageBox('studentDeletedError');
@@ -1123,38 +1213,46 @@ async function saveAssignmentGrades() {
             showMessageBox('selectAssignmentFirst');
             return;
         }
-        const scores = {};
+
+        const assignment = await getFromDB('assignments', assignmentId);
+        if (!assignment) {
+            showMessageBox('gradesSavedError');
+            console.error("Could not find assignment to save grades for:", assignmentId);
+            return;
+        }
+
+        const updatedScores = assignment.scores ? { ...assignment.scores } : {};
+
         document.querySelectorAll('#gradesStudentsContainer .student-row').forEach(row => {
             const gradeInput = row.querySelector('.grade-input');
             const checkbox = row.querySelector('.homework-checkbox');
             if (gradeInput && checkbox) {
                 const studentId = gradeInput.dataset.studentId;
-                scores[studentId] = {
+                updatedScores[studentId] = {
                     score: gradeInput.value !== '' ? parseInt(gradeInput.value, 10) : '',
                     submitted: checkbox.checked
                 };
             }
         });
-        const assignment = await getFromDB('assignments', assignmentId);
-        if (assignment) {
-            assignment.scores = scores;
-            await putToDB('assignments', assignment);
-            showMessageBox('gradesSavedSuccess');
-        }
-        if (!assignmentId.startsWith('offline_')) {
-            await addToSyncQueue({
-                type: 'set',
-                path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments/${assignmentId}`,
-                data: { scores: scores }
-            });
-            processSyncQueue();
-        }
+
+        assignment.scores = updatedScores;
+        await putToDB('assignments', assignment);
+        showMessageBox('gradesSavedSuccess');
+
+        // تم إزالة الشرط الذي كان يمنع المزامنة للواجبات التي تبدأ بـ "offline_"
+        await addToSyncQueue({
+            type: 'set',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/assignments/${assignmentId}`,
+            data: { scores: updatedScores },
+            options: { merge: true } // استخدام set مع merge لضمان تحديث آمن
+        });
+        processSyncQueue();
+
     } catch (error) {
         console.error("Error saving grades:", error);
         showMessageBox("gradesSavedError");
     }
 }
-
 async function saveRecurringSchedule() {
     if (!TEACHER_ID || !SELECTED_GROUP_ID) return;
     const subject = document.getElementById('recurringSubject').value.trim();
@@ -1261,16 +1359,17 @@ function renderSchedules(schedules) {
     });
 }
 async function deleteRecurringSchedule(scheduleId) {
+
+    console.log(`--- محاولة حذف الجدول --- ID: ${scheduleId}`);
+
     if (!TEACHER_ID || !SELECTED_GROUP_ID || !scheduleId) return;
     try {
         await deleteFromDB('schedules', scheduleId);
-        if (!scheduleId.startsWith('offline_')) {
-            await addToSyncQueue({
-                type: 'delete',
-                path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules/${scheduleId}`
-            });
-            processSyncQueue();
-        }
+        await addToSyncQueue({
+            type: 'delete',
+            path: `teachers/${TEACHER_ID}/groups/${SELECTED_GROUP_ID}/recurringSchedules/${scheduleId}`
+        });
+        processSyncQueue();
         showMessageBox('scheduleDeletedSuccess');
         fetchRecurringSchedules();
     } catch (error) {
